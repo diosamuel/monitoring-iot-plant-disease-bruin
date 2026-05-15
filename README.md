@@ -22,7 +22,7 @@ layers so that each device only does work that fits its resource budget:
                  
 ## System Architecture
 
-[architecture](./architecture.png)
+![architecture](./architecture.png)
 
 ### Source Layer (IoT Devices)
 
