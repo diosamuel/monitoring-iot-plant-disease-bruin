@@ -1,0 +1,13 @@
+[project]
+name = "smart-plant-monitoring"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "duckdb>=1.5.2",
+    "fastapi>=0.136.1",
+    "paho-mqtt>=2.1.0",
+    "python-multipart>=0.0.28",
+    "uvicorn>=0.47.0",
+]

@@ -1,0 +1,10 @@
+.bruin.yml
+
+# Local environment & secrets
+.env
+secrets/*
+!secrets/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
