@@ -3,3 +3,6 @@ fastapi
 uvicorn
 python-multipart
 duckdb
+google-genai
+python-dotenv
+Pillow
