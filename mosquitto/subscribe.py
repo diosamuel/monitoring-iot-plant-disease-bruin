@@ -3,7 +3,7 @@ import paho.mqtt.client as mqtt
 import duckdb 
 from datetime import datetime
 
-BROKER_HOST = "192.168.1.22"   # Mosquitto is on Raspberry Pi
+BROKER_HOST = "192.168.1.23"   # Mosquitto is on Raspberry Pi
 BROKER_PORT = 1883
 TOPIC = "plant/sensor"
 
