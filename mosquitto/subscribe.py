@@ -8,7 +8,7 @@ load_dotenv()
 
 
 BROKER_HOST = os.getenv("MQTT_HOST")   # Mosquitto is on Raspberry Pi
-BROKER_PORT = os.getenv("MQTT_PORT")
+BROKER_PORT = int(os.getenv("MQTT_PORT"))
 TOPIC = "esp32/dht22"
 
 conn = duckdb.connect("sources/stg_sensor.duckdb")

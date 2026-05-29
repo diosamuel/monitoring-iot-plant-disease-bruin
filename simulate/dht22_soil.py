@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple Soil Moisture Sensor Simulator
-Publishes soil moisture to MQTT.
+Simple DHT22 Sensor Simulator
+Publishes temperature and humidity to MQTT.
 """
 
 import paho.mqtt.client as mqtt
@@ -9,31 +9,28 @@ import time
 import random
 
 # Simple configuration
-broker = "localhost"
+broker = "192.168.1.39"
 port = 1883
-topic = "sensors/soil"
+topic = "esp32/dht22"
 
 def main():
-    print("Starting soil moisture simulator...")
+    print("Starting DHT22 simulator...")
     print(f"Publishing to {broker}:{port} topic: {topic}")
     
     client = mqtt.Client()
-    moisture = 50.0  # Start at 50%
     
     try:
         client.connect(broker, port)
         client.loop_start()
         
         while True:
-            # Change moisture slightly
-            change = random.uniform(-2, 2)
-            moisture += change
-            
-            # Keep between 0-100%
-            moisture = max(0, min(100, moisture))
+            # Generate random temperature (20-30°C) and humidity (40-80%)zzzzzzz
+            temp = round(20 + random.random() * 10, 1)
+            humid = round(40 + random.random() * 40, 1)
+            soil = round(50 + random.random() * 50, 1)
             
             # Create payload
-            payload = f"soil={round(moisture, 1)}"
+            payload = f"temp={temp};humid={humid};soil={soil}"
             
             # Publish
             client.publish(topic, payload)
