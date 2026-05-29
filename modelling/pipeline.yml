@@ -4,5 +4,4 @@ start_date: "2025-05-29"
 catchup: false
 
 default_connections:
-    duckdb: "duckdb-weather"
     google_cloud_platform: "gcp-default"
