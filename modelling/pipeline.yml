@@ -1,7 +1,8 @@
-name: bruin-init
-schedule: daily
-start_date: "2023-03-20"
+name: smart-plant-monitoring
+schedule: "0 */12 * * *"
+start_date: "2025-05-29"
 catchup: false
 
 default_connections:
-    duckdb: "duckdb-default"
+    duckdb: "duckdb-weather"
+    google_cloud_platform: "gcp-default"

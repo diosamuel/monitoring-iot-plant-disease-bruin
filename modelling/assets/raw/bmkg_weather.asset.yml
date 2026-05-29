@@ -1,0 +1,31 @@
+name: raw.bmkg_weather
+type: duckdb.sql
+connection: duckdb-weather
+
+columns:
+  - name: id
+    type: bigint
+  - name: adm1
+    type: varchar
+  - name: adm2
+    type: varchar
+  - name: adm3
+    type: varchar
+  - name: adm4
+    type: varchar
+  - name: provinsi
+    type: varchar
+  - name: kotkab
+    type: varchar
+  - name: kecamatan
+    type: varchar
+  - name: desa
+    type: varchar
+  - name: lon
+    type: double
+  - name: lat
+    type: double
+  - name: timezone
+    type: varchar
+  - name: weather_data
+    type: json

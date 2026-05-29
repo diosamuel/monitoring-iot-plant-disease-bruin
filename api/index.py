@@ -17,7 +17,6 @@ IMAGE_DIR = "images"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-# DuckDB staging file that holds the image_log / image_analytics tables.
 DEFAULT_DUCKDB_PATH = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "sources", "stg_image.duckdb")
 )

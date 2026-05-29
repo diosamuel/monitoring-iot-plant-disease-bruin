@@ -189,3 +189,5 @@ reachable on `localhost:1883` (TCP) and `localhost:9001` (WebSockets).
 - Bruin transformations
 - ETL upload to BigQuery
 - Streamlit dashboard
+
+Camera

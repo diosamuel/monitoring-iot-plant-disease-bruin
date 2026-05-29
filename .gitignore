@@ -8,3 +8,7 @@ secrets/*
 # Python
 __pycache__/
 *.pyc
+
+logs/runs
+logs/*.log
+*.py[cod]
