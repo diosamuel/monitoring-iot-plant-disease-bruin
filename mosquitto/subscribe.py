@@ -1,37 +1,45 @@
 import json
-import paho.mqtt.client as mqtt
-import duckdb 
-from datetime import datetime
 import os
+from datetime import datetime
+
+import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
+
 load_dotenv()
 
-
-BROKER_HOST = os.getenv("MQTT_HOST")   # Mosquitto is on Raspberry Pi
+BROKER_HOST = os.getenv("MQTT_HOST")
 BROKER_PORT = int(os.getenv("MQTT_PORT"))
 TOPIC = "esp32/dht22"
 
-conn = duckdb.connect("sources/stg_sensor.duckdb")
+JSONL_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "stg_sensor.jsonl")
+
 
 def on_connect(client, userdata, flags, rc):
     print("Connected to MQTT broker")
     client.subscribe(TOPIC)
 
+
 def on_message(client, userdata, msg):
     raw_payload = msg.payload.decode()
-    # Split payload
     temp, humid, soil = raw_payload.split(";")
-    # Take value after "="
     temp = float(temp.split("=")[1])
     humid = float(humid.split("=")[1])
     soil = float(soil.split("=")[1])
     event_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    conn.execute("""
-        INSERT INTO sensor VALUES (?, ?, ?,NULL,?)
-    """, (temp, humid, soil, event_time))
+    row = {
+        "temp": temp,
+        "humid": humid,
+        "soil": soil,
+        "filename": None,
+        "event_time": event_time,
+    }
 
-    print("Raw message:", raw_payload)
+    with open(JSONL_PATH, "a") as f:
+        f.write(json.dumps(row) + "\n")
+
+    print(f"Saved: {row}")
+
 
 client = mqtt.Client()
 client.on_connect = on_connect
