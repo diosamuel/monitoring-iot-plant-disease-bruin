@@ -14,3 +14,4 @@ logs/*.log
 *.py[cod]
 
 api/images/*
+!api/images/.gitkeep
