@@ -2,10 +2,14 @@ import json
 import paho.mqtt.client as mqtt
 import duckdb 
 from datetime import datetime
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-BROKER_HOST = "192.168.1.23"   # Mosquitto is on Raspberry Pi
-BROKER_PORT = 1883
-TOPIC = "plant/sensor"
+
+BROKER_HOST = os.getenv("MQTT_HOST")   # Mosquitto is on Raspberry Pi
+BROKER_PORT = os.getenv("MQTT_PORT")
+TOPIC = "esp32/dht22"
 
 conn = duckdb.connect("sources/stg_sensor.duckdb")
 

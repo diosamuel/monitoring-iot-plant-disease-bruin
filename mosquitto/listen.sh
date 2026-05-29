@@ -1,0 +1,1 @@
+mosquitto_sub -h localhost -t 'esp32/#' -F '%I %t %p'

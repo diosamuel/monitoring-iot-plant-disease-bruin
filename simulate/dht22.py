@@ -9,9 +9,9 @@ import time
 import random
 
 # Simple configuration
-broker = "localhost"
+broker = "192.168.1.39"
 port = 1883
-topic = "sensors/dht22"
+topic = "esp32/dht22"
 
 def main():
     print("Starting DHT22 simulator...")
