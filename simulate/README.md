@@ -19,17 +19,6 @@ Minimal simulators for testing.
 - Format: `soil=45.3`
 - Run: `python3 soil.py`
 
-## Requirements
-```bash
-pip install paho-mqtt fastapi uvicorn
-```
-
-## Quick Start
-1. Start MQTT broker: `mosquitto -v`
-2. Run camera: `python3 cam.py`
-3. Run DHT22: `python3 dht22.py`
-4. Run soil: `python3 soil.py`
-
 ## Test
 - View image: http://localhost:3000/
 - Download: `curl -O http://localhost:3000/`
