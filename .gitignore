@@ -17,3 +17,9 @@ api/images/*
 !api/images/.gitkeep
 
 sources/*.duckdb
+
+modelling/.bruin.yml
+modelling/logs/runs
+modelling/logs/*.log
+modelling/__pycache__/
+modelling/*.py[cod]
