@@ -1,8 +1,18 @@
+"""
+Plant image processing and prediction pipeline.
+Flow:
+1. Read image from disk (or receive as bytes)
+2. Preprocess (resize, compress)
+3. Save processed image to api/images/
+4. Log to sources/image-log.jsonl
+5. Send to Gemini for prediction
+6. Save result to sources/image-analytics.jsonl
+"""
+
+import json
 import os
+import sys
 import uuid
-import duckdb
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from pydantic import BaseModel
 from datetime import datetime
 from dotenv import load_dotenv
 from google import genai
@@ -10,121 +20,95 @@ from google.genai import types
 from preprocess.image import preprocessImage
 
 load_dotenv()
-app = FastAPI()
-
-# check folder
-IMAGE_DIR = "images"
+# Config
+IMAGE_DIR = os.path.join(os.path.dirname(__file__), "images")
+SOURCES_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "sources"))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-
-DEFAULT_DUCKDB_PATH = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "sources", "stg_image.duckdb")
-)
-DUCKDB_PATH = os.getenv("STG_IMAGE_DUCKDB_PATH", DEFAULT_DUCKDB_PATH)
-
 WIDTH_SIZE = 1024
 HEIGHT_SIZE = 1024
-
-with open("./system_prompt.txt","r") as f:
+PROMPT_PATH = os.path.join(os.path.dirname(__file__), "system_prompt.txt")
+with open(PROMPT_PATH, "r") as f:
     PREDICT_PROMPT = f.read()
+IMAGE_LOG_PATH = os.path.join(SOURCES_DIR, "image-log.jsonl")
+IMAGE_ANALYTICS_PATH = os.path.join(SOURCES_DIR, "image-analytics.jsonl")
 
-client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
-
-def connectDuckDB():
-    return duckdb.connect(DUCKDB_PATH)
-
-def storeImage(filename, event_time):
-    """Insert a new image entry into the image_log table in stg_image.duckdb."""
-    try:
-        con = connectDuckDB()
-    except Exception as exc:
-        print("[WARN] Could not open DuckDB at", DUCKDB_PATH, ":", exc)
-        return {
-            "status": "error",
-            "detail": str(exc),
-        }
-
-    try:
-        con.execute(
-            """
-            INSERT INTO image_log (filename, event_time)
-            VALUES (?, ?);
-            """,
-            [filename, event_time],
-        )
-        return {
-            "status": "success",
-            "filename": filename,
-            "event_time": event_time.isoformat(),
-        }
-    finally:
-        con.close()
-
-@app.get("/")
-async def root():
-    return {
-        "message": "Hello from RaspberryPI 3B",
-    }
-
-@app.post("/upload")
-async def upload_image(file: UploadFile = File(...)):
-    raw = await file.read()
-    try:
-        processed = preprocessImage(raw)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    upload_time = datetime.now()
-    timestamp = upload_time.strftime("%Y%m%d_%H%M%S")
+def save_image(raw_bytes: bytes) -> tuple[str, str]:
+    """Preprocess and save image. Returns (filename, filepath)."""
+    processed = preprocessImage(raw_bytes)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     unique_id = uuid.uuid4().hex
     filename = f"{timestamp}_{unique_id}.jpg"
     filepath = os.path.join(IMAGE_DIR, filename)
+    os.makedirs(IMAGE_DIR, exist_ok=True)
     with open(filepath, "wb") as f:
         f.write(processed)
-    print("[OK] Saved:", filepath)
+    print(f"[1/3] Saved: {filepath} ({len(processed)} bytes)")
+    return filename, filepath
 
-    log_result = storeImage(filename, upload_time)
 
-    return {
+def log_image(filename: str, event_time: datetime):
+    """Append image log entry to JSONL."""
+    row = {
+        "filename": filename,
+        "event_time": event_time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    with open(IMAGE_LOG_PATH, "a") as f:
+        f.write(json.dumps(row) + "\n")
+    print(f"[2/3] Logged to {IMAGE_LOG_PATH}")
+
+
+def predict(filename: str, filepath: str) -> dict:
+    """Send image to Gemini and return prediction result."""
+    if not GEMINI_API_KEY:
+        print("[ERROR] GEMINI_API_KEY not set")
+        return {"status": "error", "detail": "GEMINI_API_KEY not set"}
+
+    with open(filepath, "rb") as f:
+        image_bytes = f.read()
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[
+            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+            PREDICT_PROMPT.format(x=WIDTH_SIZE, y=HEIGHT_SIZE),
+        ],
+    )
+
+    result = {
         "status": "success",
         "filename": filename,
         "path": filepath,
-        "bytes": len(processed),
-        "image_log": log_result,
+        "model": GEMINI_MODEL,
+        "bytes": len(image_bytes),
+        "response": response.text,
     }
 
-@app.post("/predict")
-async def predict(payload):
-    if client is None:
-        raise HTTPException(
-            status_code=500,
-            detail="GEMINI_API_KEY is not set on the server."
-        )
+    with open(IMAGE_ANALYTICS_PATH, "a") as f:
+        f.write(json.dumps(result) + "\n")
 
-    filepath = os.path.join(IMAGE_DIR, payload)
-    if not os.path.isfile(filepath):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Image '{payload}' not found in {IMAGE_DIR}/"
-        )
+    print(f"[3/3] Prediction saved to {IMAGE_ANALYTICS_PATH}")
+    return result
 
-    with open(filepath, "rb") as f:
-        processed = f.read()
 
-    try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=[
-                types.Part.from_bytes(data=processed, mime_type="image/jpeg"),
-                PREDICT_PROMPT.format(x=WIDTH_SIZE,y=HEIGHT_SIZE),
-            ],
-        )
-        return {
-            "status": "success",
-            "filename": payload,
-            "path": filepath,
-            "model": GEMINI_MODEL,
-            "bytes": len(processed),
-            "response": response.text,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def run(image_path: str):
+    """Full pipeline: preprocess → log → predict."""
+    with open(image_path, "rb") as f:
+        raw = f.read()
+
+    filename, filepath = save_image(raw)
+    event_time = datetime.now()
+    log_image(filename, event_time)
+    result = predict(filename, filepath)
+    print(json.dumps(result, indent=2))
+    return result
+
+
+def run_from_bytes(raw: bytes):
+    """Full pipeline from raw bytes (used by ingest/cam.py)."""
+    filename, filepath = save_image(raw)
+    event_time = datetime.now()
+    log_image(filename, event_time)
+    result = predict(filename, filepath)
+    return result

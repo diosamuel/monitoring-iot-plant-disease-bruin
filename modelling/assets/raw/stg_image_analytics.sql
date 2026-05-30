@@ -31,7 +31,6 @@ columns:
 SELECT
     filename,
     status,
-    path,
     json_extract_string(response::JSON, '$.plant_type')       AS plant_type,
     json_extract_string(response::JSON, '$.health_status')    AS health_status,
     CAST(json_extract_string(response::JSON, '$.confidence') AS DOUBLE)  AS confidence,

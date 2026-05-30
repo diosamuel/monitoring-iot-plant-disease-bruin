@@ -1,19 +1,19 @@
+import os
+import sys
 import requests
 
-CAPTURE_URL = "http://localhost:3000/capture"
-UPLOAD_URL = "http://localhost:8000/upload"
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
+from index import run_from_bytes
 
-# Capture image as binary
+CAPTURE_URL = "https://earthsally.com/wp-content/uploads/2021/03/diseasebanner.jpg"
+
+# Capture image as binary from ESP32-CAM
 resp = requests.get(CAPTURE_URL, timeout=30)
 resp.raise_for_status()
 temp = resp.content
 
-# Post binary image to upload endpoint
-upload_resp = requests.post(
-    UPLOAD_URL,
-    files={"file": ("capture.jpg", temp, "image/jpeg")},
-    timeout=30,
-)
-upload_resp.raise_for_status()
+print(f"Captured {len(temp)} bytes from {CAPTURE_URL}")
 
-print(f"Captured {len(temp)} bytes, uploaded: {upload_resp.status_code}")
+# Process and predict
+result = run_from_bytes(temp)
+print(f"Done: {result.get('status')} - {result.get('filename')}")
