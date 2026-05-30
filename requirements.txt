@@ -6,3 +6,4 @@ duckdb
 google-genai
 python-dotenv
 Pillow
+streamlit

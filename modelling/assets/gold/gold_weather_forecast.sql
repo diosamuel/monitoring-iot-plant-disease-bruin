@@ -4,6 +4,7 @@ name: gold_edw.weather_forecast
 type: bq.sql
 materialization:
   type: table
+  strategy: truncate+insert
 
 depends:
   - silver.weather

@@ -5,7 +5,7 @@ import requests
 
 BMKG_URL = "https://api.bmkg.go.id/publik/prakiraan-cuaca"
 ADM4 = "18.71.02.1003"
-JSONL_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "stg_weather.jsonl")
+JSONL_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "bmkg_weather.jsonl")
 
 # Fetch
 resp = requests.get(BMKG_URL, params={"adm4": ADM4}, timeout=30)
