@@ -1,68 +1,29 @@
-# Raspberry Pi Data Warehouse IoT Smart Monitoring
+# Smart Plant Monitoring — IoT Data Warehouse
 
 An IoT-based smart plant monitoring system that combines edge computing,
-lightweight AI inference, distributed processing, and cloud analytics
-using a Raspberry Pi edge node, a VPS, and BigQuery.
+AI inference, and cloud analytics using ESP32 devices, a Raspberry Pi
+edge node, a VPS with DuckDB + Bruin pipelines, and BigQuery.
 
 ---
 
 ## Overview
 
 Plant conditions are monitored in near real-time using IoT sensors and
-image-based disease detection. The architecture is split across three
-layers so that each device only does work that fits its resource budget:
+image-based disease detection powered by Gemini Vision. The architecture
+is split across three layers so each device only does work that fits its
+resource budget:
 
-- **ESP32 / ESP32-CAM** for data acquisition
-- **Raspberry Pi 3B** as an edge computing node (TensorFlow Lite inference)
-- **VPS** for the message broker, staging database, transformations, and ETL
-- **BigQuery** as the analytical data warehouse
-- **Streamlit** for the operator dashboard
+- **ESP32 / ESP32-CAM** — data acquisition (sensors + camera)
+- **Raspberry Pi 3B** — edge computing (TFLite inference, preprocessing)
+- **VPS** — message broker, staging DB, Bruin data pipeline, ETL
+- **BigQuery** — analytical data warehouse
+- **Streamlit** — operator dashboard
 
 ---
-                 
+
 ## System Architecture
 
 ![architecture](./architecture.png)
-
-### Source Layer (IoT Devices)
-
-- ESP32-CAM (image capture)
-- DHT11 temperature & humidity sensor
-- Soil moisture sensor
-
-Devices publish to the MQTT broker on the VPS.
-
-### Edge Layer — Raspberry Pi 3B (1 GB RAM)
-
-Lightweight workloads only:
-
-- Receive sensor data from ESP32 devices
-- Receive images from ESP32-CAM
-- Image resize / compression and preprocessing
-- TensorFlow Lite inference (plant disease prediction)
-- Publish sensor readings and prediction results to MQTT
-
-Bulk storage and heavy transformation are delegated to the VPS.
-
-### VPS / Cloud Processing Layer (2 GB RAM)
-
-- **Mosquitto** — MQTT broker for sensor and prediction topics
-- **Ingestor** — subscribes to MQTT and writes raw events into DuckDB
-- **DuckDB** — local staging / analytical database
-- **Bruin** — pipeline that cleans, transforms, and aggregates the
-  staged data into curated tables
-- **ETL uploader** — incrementally loads curated tables from DuckDB
-  into BigQuery
-- **Streamlit dashboard** — operator-facing UI
-
-### Cloud Analytics Layer
-
-- **BigQuery** stores curated datasets and serves analytical queries
-- **Streamlit** reads from BigQuery (and DuckDB for fast local views)
-
----
-
-## Data Flow
 
 ```text
 ESP32 / ESP32-CAM
@@ -74,9 +35,9 @@ Raspberry Pi 3B (edge inference, TFLite)
 VPS
  ├─ Mosquitto (broker)
  ├─ Ingestor  (MQTT → DuckDB)
- ├─ DuckDB    (staging)
- ├─ Bruin     (clean / transform / aggregate)
- └─ ETL       (DuckDB → BigQuery, incremental)
+ ├─ DuckDB    (staging: sources/)
+ ├─ Bruin     (raw → silver → gold)
+ └─ ETL       (gold → BigQuery)
         │
         ▼
 BigQuery  ──►  Streamlit Dashboard
@@ -84,110 +45,150 @@ BigQuery  ──►  Streamlit Dashboard
 
 ---
 
-## Services & Ports (docker-compose)
+## Project Structure
 
-All services run on the `plant-net` bridge network. Only the broker and
-dashboard publish ports to the host.
+```
+├── api/                    # FastAPI prediction service (Gemini Vision)
+│   ├── index.py
+│   ├── system_prompt.txt
+│   ├── preprocess/         # Image preprocessing
+│   └── images/             # Captured images (gitignored)
+├── esp32/                  # Device firmware
+│   ├── esp32cam/           # Camera web server
+│   └── sensor/             # DHT11 + soil moisture
+├── mosquitto/              # MQTT broker config
+│   ├── config/
+│   └── subscribe.py
+├── sources/                # DuckDB staging databases + schemas
+│   ├── stg_sensor.duckdb
+│   ├── stg_sensor.sql
+│   ├── stg_image.duckdb
+│   ├── stg_image.sql
+│   ├── stg_weather.duckdb
+│   └── stg_weather.sql
+├── modelling/              # Bruin data pipeline
+│   ├── pipeline.yml
+│   ├── assets/
+│   │   ├── raw/            # Source declarations (lineage entry points)
+│   │   ├── silver/         # DuckDB transformations
+│   │   └── gold/           # BigQuery output tables
+│   └── logs/
+├── simulate/               # Simulator scripts for testing
+│   ├── cam.py              # Camera capture simulator
+│   ├── dht22.py            # Temperature/humidity simulator
+│   ├── soil.py             # Soil moisture simulator
+│   └── weather.py          # BMKG weather API fetcher
+├── secrets/                # GCP service account (gitignored)
+├── docker-compose.yaml
+├── .bruin.yml              # Bruin connections config (gitignored)
+└── .env.example
+```
 
-| Service     | Image                              | Host Port | Container Port | Role                                              |
-|-------------|------------------------------------|-----------|----------------|---------------------------------------------------|
-| `mosquitto` | `eclipse-mosquitto:2.0`            | 1883      | 1883           | MQTT broker                                       |
-| `mosquitto` | `eclipse-mosquitto:2.0`            | 9001      | 9001           | MQTT over WebSockets                              |
-| `ingestor`  | `python:3.11-slim` (paho-mqtt, duckdb) | —     | —              | Subscribes to MQTT, writes raw events to DuckDB   |
-| `bruin`     | `ghcr.io/bruin-data/bruin:latest`  | —         | —              | One-shot pipeline run against `./bruin`           |
-| `etl`       | `python:3.11-slim` (duckdb, google-cloud-bigquery, pandas, pyarrow) | — | — | Incremental DuckDB → BigQuery upload |
-| `dashboard` | `python:3.11-slim` (streamlit, duckdb, pandas, google-cloud-bigquery, pyarrow) | 8501 | 8501 | Streamlit UI |
+---
 
-Shared volumes:
+## Data Pipeline (Bruin)
 
-- `mosquitto-data`, `mosquitto-log` — broker persistence
-- `duckdb-data` — DuckDB staging file shared between `ingestor`, `bruin`,
-  `etl`, and `dashboard`
-- `./secrets:/secrets:ro` — Google service account JSON for BigQuery
+The pipeline follows a **medallion architecture** (raw → silver → gold)
+with full lineage tracking:
+
+```
+raw.sensor ──────────→ silver.sensor ──────→ gold.sensor_readings
+                                        └──→ gold.plant_health
+raw.image_log ───────┐
+raw.image_analytics ─┴→ silver.image ──────→ gold.plant_health
+
+raw.bmkg_weather ────→ silver.weather ─────→ gold.weather_forecast
+```
+
+| Layer  | Storage | Description |
+|--------|---------|-------------|
+| Raw    | DuckDB  | Source declarations for staging tables |
+| Silver | DuckDB  | Cleaned, renamed, normalized tables |
+| Gold   | BigQuery | Analytics-ready tables for dashboard |
+
+### Running the pipeline
+
+```bash
+# Run from project root
+cd /path/to/smart-plant-monitoring
+
+# Run full pipeline
+bruin run modelling/
+
+# Run a single asset
+bruin run modelling/assets/silver/silver_weather.sql
+
+# View lineage
+bruin lineage modelling/
+```
+
+---
+
+## Staging Tables
+
+| Table | Database | Source |
+|-------|----------|--------|
+| `sensor` | `stg_sensor.duckdb` | ESP32 DHT11 + soil via MQTT |
+| `image_log` | `stg_image.duckdb` | ESP32-CAM captures |
+| `image_analytics` | `stg_image.duckdb` | Gemini Vision predictions |
+| `bmkg_weather` | `stg_weather.duckdb` | BMKG weather API (JSON) |
+
+---
+
+## Simulators
+
+Scripts in `simulate/` populate staging databases for local development:
+
+```bash
+python simulate/weather.py    # Fetch BMKG forecast → stg_weather.duckdb
+python simulate/dht22.py      # Simulate sensor readings → stg_sensor.duckdb
+python simulate/soil.py       # Simulate soil moisture → stg_sensor.duckdb
+python simulate/cam.py        # Simulate camera capture → stg_image.duckdb
+```
 
 ---
 
 ## Configuration
 
-Copy the example env file and adjust as needed. Compose picks it up
-automatically.
-
 ```bash
 cp .env.example .env
 ```
 
-| Variable        | Default              | Used by             |
-|-----------------|----------------------|---------------------|
-| `BQ_PROJECT_ID` | `your-gcp-project`   | `etl`, `dashboard`  |
-| `BQ_DATASET`    | `smart_plant`        | `etl`, `dashboard`  |
+| Variable | Default | Used by |
+|----------|---------|---------|
+| `BQ_PROJECT_ID` | `your-gcp-project` | Gold layer, ETL, Dashboard |
+| `BQ_DATASET` | `smart_plant` | Gold layer, ETL, Dashboard |
+| `GEMINI_API_KEY` | — | API prediction service |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | API prediction service |
 
-Place your Google service account JSON at `./secrets/gcp-sa.json`. It is
-mounted read-only into `etl` and `dashboard` and referenced by
-`GOOGLE_APPLICATION_CREDENTIALS`.
-
-MQTT topics consumed by the ingestor (override with `MQTT_TOPICS`):
-
-```text
-plants/<plant_id>/sensors
-plants/<plant_id>/predictions
-```
+Place your Google service account JSON at `./secrets/gcp-sa.json`.
 
 ---
 
-## Quick Start
+## Docker Compose Services
 
-```bash
-# 1. Start the broker, ingestor, and dashboard
-docker compose up -d mosquitto ingestor dashboard
+| Service | Port | Role |
+|---------|------|------|
+| `mosquitto` | 1883, 9001 | MQTT broker |
+| `ingestor` | — | MQTT → DuckDB |
+| `bruin` | — | One-shot pipeline run |
+| `etl` | — | DuckDB gold → BigQuery |
+| `dashboard` | 8501 | Streamlit UI |
 
-# 2. Run the Bruin pipeline once curated data should be (re)built
-docker compose run --rm bruin
-
-# 3. Start the ETL uploader (needs ./secrets/gcp-sa.json)
-docker compose up -d etl
-```
-
-Open the dashboard at <http://localhost:8501>. The MQTT broker is
-reachable on `localhost:1883` (TCP) and `localhost:9001` (WebSockets).
-
-> Note: `bruin` is a one-shot job. `etl` and `dashboard` only `depends_on`
-> it for *startup* ordering, not completion. Re-run `docker compose run
-> --rm bruin` whenever you want to refresh curated tables.
 
 ---
 
 ## Technology Stack
 
-| Category          | Technology                       |
-|-------------------|----------------------------------|
-| IoT Device        | ESP32, ESP32-CAM                 |
-| Sensors           | DHT11, Soil Moisture             |
-| Edge Computing    | Raspberry Pi 3B                  |
-| Messaging         | MQTT, Mosquitto                  |
-| AI Inference      | TensorFlow Lite                  |
-| Data Processing   | Bruin                            |
-| Staging Database  | DuckDB                           |
-| Data Warehouse    | Google BigQuery                  |
-| Dashboard         | Streamlit                        |
-| Orchestration     | Docker Compose                   |
-
----
-
-## Resource Distribution
-
-### Raspberry Pi 3B (1 GB RAM)
-
-- Sensor reception
-- Image preprocessing
-- TensorFlow Lite inference
-- MQTT publishing
-
-### VPS (2 GB RAM)
-
-- MQTT broker (Mosquitto)
-- DuckDB staging
-- Bruin transformations
-- ETL upload to BigQuery
-- Streamlit dashboard
-
-Camera
+| Category | Technology |
+|----------|-----------|
+| IoT Devices | ESP32, ESP32-CAM |
+| Sensors | DHT11, Soil Moisture |
+| Edge Computing | Raspberry Pi 3B |
+| AI Inference | TensorFlow Lite, Gemini Vision |
+| Messaging | MQTT (Mosquitto) |
+| Staging Database | DuckDB |
+| Data Pipeline | Bruin |
+| Data Warehouse | Google BigQuery |
+| Dashboard | Streamlit |
+| Orchestration | Docker Compose |

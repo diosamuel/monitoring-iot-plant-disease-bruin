@@ -1,7 +1,11 @@
-/*@bruin
+/* @bruin
 name: raw.sensor
 type: duckdb.sql
 connection: duckdb-sensor
+
+materialization:
+  type: table
+  strategy: create+replace
 
 columns:
   - name: temp
@@ -22,4 +26,4 @@ SELECT
     CAST(soil AS FLOAT) AS soil,
     CAST(filename AS VARCHAR) AS filename,
     CAST(event_time AS TIMESTAMP) AS event_time
-FROM read_json_auto('stg_sensor.jsonl');
+FROM read_json_auto('sources/esp32_sensor.jsonl');
