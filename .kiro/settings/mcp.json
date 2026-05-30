@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "bruin": {
+      "type": "stdio",
+      "command": "bruin",
+      "args": ["mcp"],
+      "env": {},
+      "disabled": false
+    }
+  }
+}

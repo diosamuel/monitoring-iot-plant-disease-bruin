@@ -1,9 +1,0 @@
-name: raw.image_log
-type: duckdb.sql
-connection: duckdb-image
-
-columns:
-  - name: filename
-    type: string
-  - name: event_time
-    type: timestamp

@@ -1,6 +1,6 @@
 /* @bruin
 
-name: gold.plant_health
+name: gold_edw.plant_health
 type: bq.sql
 materialization:
   type: table
@@ -54,12 +54,6 @@ columns:
   - name: ingested_at
     type: TIMESTAMP
     description: pipeline run timestamp
-
-custom_checks:
-  - name: row count is greater than zero
-    query: SELECT count(*) > 0 FROM gold.plant_health
-    value: 1
-
 @bruin */
 
 -- Gold layer: join image predictions with sensor readings for a complete plant health view

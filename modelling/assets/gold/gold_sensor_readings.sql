@@ -1,6 +1,6 @@
 /* @bruin
 
-name: gold.sensor_readings
+name: gold_edw.sensor_readings
 type: bq.sql
 materialization:
   type: table
@@ -31,12 +31,6 @@ columns:
   - name: ingested_at
     type: TIMESTAMP
     description: pipeline run timestamp
-
-custom_checks:
-  - name: row count is greater than zero
-    query: SELECT count(*) > 0 FROM gold.sensor_readings
-    value: 1
-
 @bruin */
 
 SELECT

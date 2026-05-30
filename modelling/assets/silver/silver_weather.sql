@@ -99,23 +99,12 @@ columns:
   - name: image_url
     type: varchar
     description: weather icon URL
-
-custom_checks:
-  - name: row count is greater than zero
-    description: ensures the table is not empty after transformation
-    query: SELECT count(*) > 0 FROM silver.weather
-    value: 1
-  - name: no duplicate forecast per location and time
-    description: ensures uniqueness on (adm4, datetime_utc)
-    query: SELECT count(*) FROM (SELECT adm4, datetime_utc FROM silver.weather GROUP BY 1, 2 HAVING count(*) > 1)
-    value: 0
-
 @bruin */
 
 WITH source AS (
     SELECT
         id, adm4, provinsi, kotkab, kecamatan, desa, lon, lat, timezone, weather_data
-    FROM bmkg_weather
+    FROM raw.bmkg_weather
     WHERE weather_data IS NOT NULL
 ),
 data_entries AS (

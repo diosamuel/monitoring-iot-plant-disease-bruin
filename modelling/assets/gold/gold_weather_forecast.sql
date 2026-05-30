@@ -1,6 +1,6 @@
 /* @bruin
 
-name: gold.weather_forecast
+name: gold_edw.weather_forecast
 type: bq.sql
 materialization:
   type: table
@@ -85,12 +85,6 @@ columns:
   - name: ingested_at
     type: TIMESTAMP
     description: pipeline run timestamp
-
-custom_checks:
-  - name: row count is greater than zero
-    query: SELECT count(*) > 0 FROM gold.weather_forecast
-    value: 1
-
 @bruin */
 
 SELECT

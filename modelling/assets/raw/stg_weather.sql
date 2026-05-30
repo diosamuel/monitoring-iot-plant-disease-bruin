@@ -7,6 +7,8 @@ materialization:
   type: table
 
 columns:
+  - name: id
+    type: bigint
   - name: adm1
     type: varchar
   - name: adm2
@@ -35,6 +37,7 @@ columns:
 @bruin */
 
 SELECT
+    ROW_NUMBER() OVER () AS id,
     adm1,
     adm2,
     adm3,

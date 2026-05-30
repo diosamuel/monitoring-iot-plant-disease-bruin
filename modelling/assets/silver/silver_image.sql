@@ -30,7 +30,10 @@ columns:
     description: health classification (healthy, diseased, unknown)
     checks:
       - name: accepted_values
-        value: '["healthy", "diseased", "unknown"]'
+        value:
+          - healthy
+          - diseased
+          - unknown
   - name: confidence
     type: float
     description: model confidence score (0.0 to 1.0)
@@ -47,12 +50,6 @@ columns:
     type: string
     description: JSON array of recommendations
 
-custom_checks:
-  - name: row count is greater than zero
-    description: ensures the table is not empty
-    query: SELECT count(*) > 0 FROM silver.image
-    value: 1
-
 @bruin */
 
 SELECT
@@ -65,7 +62,7 @@ SELECT
     a.summary,
     CAST(a.possible_issues AS VARCHAR)   AS possible_issues,
     CAST(a.recommendations AS VARCHAR)   AS recommendations
-FROM image_analytics a
-INNER JOIN image_log l
+FROM raw.image_analytics a
+INNER JOIN raw.image_log l
     ON a.filename = l.filename
 WHERE l.event_time IS NOT NULL

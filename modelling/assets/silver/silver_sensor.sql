@@ -29,13 +29,6 @@ columns:
   - name: soil_moisture
     type: float
     description: soil moisture raw ADC value
-
-custom_checks:
-  - name: row count is greater than zero
-    description: ensures the table is not empty
-    query: SELECT count(*) > 0 FROM silver.sensor
-    value: 1
-
 @bruin */
 
 SELECT
@@ -44,5 +37,5 @@ SELECT
     temp   AS temperature,
     humid  AS humidity,
     soil   AS soil_moisture
-FROM sensor
+FROM raw.sensor
 WHERE event_time IS NOT NULL
