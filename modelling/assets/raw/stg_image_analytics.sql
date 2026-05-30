@@ -31,10 +31,10 @@ columns:
 SELECT
     filename,
     status,
-    json_extract_string(response::JSON, '$.plant_type')       AS plant_type,
-    json_extract_string(response::JSON, '$.health_status')    AS health_status,
+    json_extract_string(response::JSON, '$.type')       AS plant_type,
+    json_extract_string(response::JSON, '$.status')    AS health_status,
     CAST(json_extract_string(response::JSON, '$.confidence') AS DOUBLE)  AS confidence,
-    CAST(json_extract_string(response::JSON, '$.severity') AS DOUBLE)    AS severity,
+    CAST(json_extract_string(response::JSON, '$.severity') AS STRING)    AS severity,
     json_extract_string(response::JSON, '$.summary')          AS summary,
     json_extract(response::JSON, '$.possible_issues')::VARCHAR   AS possible_issues,
     json_extract(response::JSON, '$.recommendations')::VARCHAR   AS recommendations,

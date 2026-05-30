@@ -11,7 +11,7 @@ BROKER_HOST = os.getenv("MQTT_HOST")
 BROKER_PORT = int(os.getenv("MQTT_PORT"))
 TOPIC = "esp32/dht22"
 
-JSONL_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "stg_sensor.jsonl")
+JSONL_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "esp32_sensor.jsonl")
 
 
 def on_connect(client, userdata, flags, rc):

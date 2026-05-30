@@ -35,7 +35,6 @@ columns:
     type: json
 
 @bruin */
-
 SELECT
     ROW_NUMBER() OVER () AS id,
     adm1,

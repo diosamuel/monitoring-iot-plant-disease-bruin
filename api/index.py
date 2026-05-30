@@ -79,7 +79,6 @@ def predict(filename: str, filepath: str) -> dict:
     result = {
         "status": "success",
         "filename": filename,
-        "path": filepath,
         "model": GEMINI_MODEL,
         "bytes": len(image_bytes),
         "response": response.text,

@@ -1,6 +1,6 @@
 /* @bruin
 
-name: silver.sensor
+name: silver_duck.sensor
 type: duckdb.sql
 connection: duckdb-sensor
 materialization:

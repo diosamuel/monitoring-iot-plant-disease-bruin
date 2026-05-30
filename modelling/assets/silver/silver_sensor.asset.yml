@@ -1,17 +1,20 @@
-/* @bruin
-
-name: gold_edw.sensor_readings
-type: bq.sql
-materialization:
-  type: table
+name: silver.sensor
+type: ingestr
+connection: gcp-default
 
 depends:
-  - silver.sensor
+  - silver_duck.sensor
+
+parameters:
+  source_connection: duckdb-sensor
+  source_table: silver_duck.sensor
+  destination: bigquery
+  incremental_strategy: replace
 
 columns:
   - name: filename
     type: STRING
-    description: image filename associated with this reading
+    description: image filename associated with this sensor reading
     checks:
       - name: not_null
   - name: event_time
@@ -28,16 +31,3 @@ columns:
   - name: soil_moisture
     type: FLOAT64
     description: soil moisture raw ADC value
-  - name: ingested_at
-    type: TIMESTAMP
-    description: pipeline run timestamp
-@bruin */
-
-SELECT
-    filename,
-    event_time,
-    temperature,
-    humidity,
-    soil_moisture,
-    CURRENT_TIMESTAMP() AS ingested_at
-FROM silver.sensor

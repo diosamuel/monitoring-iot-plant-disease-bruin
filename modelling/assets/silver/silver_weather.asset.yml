@@ -1,0 +1,78 @@
+name: silver.weather
+type: ingestr
+connection: gcp-default
+
+depends:
+  - silver_duck.weather
+
+parameters:
+  source_connection: duckdb-weather
+  source_table: silver_duck.weather
+  destination: bigquery
+  incremental_strategy: replace
+
+columns:
+  - name: id
+    type: INT64
+    description: source row id from bmkg_weather
+    checks:
+      - name: not_null
+  - name: adm4
+    type: STRING
+    description: administrative level 4 code
+    checks:
+      - name: not_null
+  - name: provinsi
+    type: STRING
+  - name: kotkab
+    type: STRING
+  - name: kecamatan
+    type: STRING
+  - name: desa
+    type: STRING
+  - name: lon
+    type: FLOAT64
+  - name: lat
+    type: FLOAT64
+  - name: timezone
+    type: STRING
+  - name: datetime_utc
+    type: TIMESTAMP
+    checks:
+      - name: not_null
+  - name: datetime_local
+    type: TIMESTAMP
+  - name: analysis_date
+    type: TIMESTAMP
+  - name: time_index
+    type: STRING
+  - name: temperature
+    type: FLOAT64
+  - name: total_cloud_cover
+    type: FLOAT64
+  - name: precipitation_mm
+    type: FLOAT64
+  - name: humidity
+    type: FLOAT64
+    checks:
+      - name: not_null
+  - name: wind_speed
+    type: FLOAT64
+  - name: wind_direction_deg
+    type: FLOAT64
+  - name: wind_from
+    type: STRING
+  - name: wind_to
+    type: STRING
+  - name: visibility_meters
+    type: FLOAT64
+  - name: visibility_text
+    type: STRING
+  - name: weather_code
+    type: INT64
+  - name: weather_desc
+    type: STRING
+  - name: weather_desc_en
+    type: STRING
+  - name: image_url
+    type: STRING

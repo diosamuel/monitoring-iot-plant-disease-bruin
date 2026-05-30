@@ -1,6 +1,6 @@
 /* @bruin
 
-name: silver.weather
+name: silver_duck.weather
 type: duckdb.sql
 connection: duckdb-weather
 materialization:
@@ -13,13 +13,9 @@ columns:
   - name: id
     type: bigint
     description: source row id from bmkg_weather
-    checks:
-      - name: not_null
   - name: adm4
     type: varchar
     description: administrative level 4 code
-    checks:
-      - name: not_null
   - name: provinsi
     type: varchar
     description: province name
@@ -44,8 +40,6 @@ columns:
   - name: datetime_utc
     type: timestamp
     description: forecast datetime in UTC
-    checks:
-      - name: not_null
   - name: datetime_local
     type: timestamp
     description: forecast datetime in local time
@@ -67,8 +61,6 @@ columns:
   - name: humidity
     type: double
     description: humidity percentage
-    checks:
-      - name: not_null
   - name: wind_speed
     type: double
     description: wind speed
