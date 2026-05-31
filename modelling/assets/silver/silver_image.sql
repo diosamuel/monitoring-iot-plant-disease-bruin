@@ -43,6 +43,9 @@ columns:
   - name: recommendations
     type: string
     description: JSON array of recommendations
+  - name: heatmap
+    type: string
+    description: JSON array of [x, y] pixel coordinates marking points of interest
 
 @bruin */
 
@@ -56,7 +59,8 @@ SELECT
     a.severity,
     a.summary,
     CAST(a.possible_issues AS VARCHAR)   AS possible_issues,
-    CAST(a.recommendations AS VARCHAR)   AS recommendations
+    CAST(a.recommendations AS VARCHAR)   AS recommendations,
+    CAST(a.heatmap AS VARCHAR)           AS heatmap
 FROM raw.image_analytics a
 INNER JOIN raw.image_log l
     ON a.filename = l.filename

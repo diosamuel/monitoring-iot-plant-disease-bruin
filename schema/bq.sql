@@ -16,7 +16,8 @@ CREATE OR REPLACE TABLE `learngcp-461809.silver.image` (
   severity FLOAT64,
   summary STRING,
   possible_issues STRING,
-  recommendations STRING
+  recommendations STRING,
+  heatmap STRING
 );
 
 CREATE OR REPLACE TABLE `learngcp-461809.silver.weather` (
@@ -98,6 +99,7 @@ CREATE OR REPLACE TABLE `learngcp-461809.gold.plant_health` (
   summary STRING,
   possible_issues STRING,
   recommendations STRING,
+  heatmap STRING,
   reading_count INT64,
   avg_temperature FLOAT64,
   avg_humidity FLOAT64,

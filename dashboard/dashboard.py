@@ -1,9 +1,25 @@
-"""Dashboard class for the Smart Plant Monitoring System."""
+"""Dashboard class for the Smart Plant Monitoring System.
+
+Schemas changed in May 2026 — the dashboard now reads directly from the
+new gold/silver tables and bypasses the legacy `data.py` helpers:
+
+- `gold.sensor_readings`   (aggregated per filename: avg/min/max)
+- `gold.plant_health`      (image predictions + aggregated sensor envelope)
+- `gold.weather_forecast`  (daily aggregated weather)
+- `silver.sensor`          (per-row sensor readings, used for time-series)
+- `silver.weather`          (per-interval weather, used for "rain in N min")
+- `raw.image_analytics`    (carries the `pixel`/`heatmap` JSON from Gemini)
+
+If the latest plant_health row exposes a `heatmap`/`pixel` array, the
+dashboard renders a matplotlib heatmap overlay on top of the leaf image.
+"""
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -11,16 +27,148 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from data import (
-    getPlantHealth,
-    getSensorReadings,
-    getWeatherForecast,
-    parseJsonList,
-)
+from google.cloud import bigquery
+from google.oauth2 import service_account
+
+from data import parseJsonList
 from models import Metrics, VisionInsight
 from styles import injectStyles
-from utils import imageDataUri, latestValue, percentOfRange, utcNow
+from utils import imageDataUri, latestValue, parsePixelPoints, percentOfRange, renderHeatmapOverlay, utcNow
 
+
+PROJECT_ID = os.getenv("BQ_PROJECT_ID", "learngcp-461809")
+GOLD_DATASET = os.getenv("BQ_GOLD_DATASET", "gold")
+SILVER_DATASET = os.getenv("BQ_SILVER_DATASET", "silver")
+SERVICE_ACCOUNT_FILE = os.getenv(
+    "GCP_SERVICE_ACCOUNT_FILE",
+    str(Path(__file__).resolve().parents[1] / "secrets" / "gcp-secrets.json"),
+)
+
+
+# ───────────────────────────── BigQuery helpers ──────────────────────────────
+
+@lru_cache(maxsize=1)
+def _bqClient() -> bigquery.Client:
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    return bigquery.Client(project=PROJECT_ID, credentials=creds)
+
+
+def _runQuery(sql: str) -> pd.DataFrame:
+    return _bqClient().query(sql).result().to_dataframe(create_bqstorage_client=False)
+
+
+def _toNaiveUtc(series: pd.Series) -> pd.Series:
+    s = pd.to_datetime(series, errors="coerce", utc=True)
+    return s.dt.tz_convert(None) if s.dt.tz is not None else s
+
+
+def _coerceNumeric(series: pd.Series) -> pd.Series:
+    if series.dtype.kind in "fiu":
+        return series.astype(float)
+    cleaned = (
+        series.astype(str)
+        .str.replace("%", "", regex=False)
+        .str.strip()
+        .replace({"": None, "nan": None, "None": None})
+    )
+    return pd.to_numeric(cleaned, errors="coerce")
+
+
+# ───────────────────────────── Data loaders ──────────────────────────────────
+
+@st.cache_data(ttl=60, show_spinner="Loading sensor data...")
+def _loadSensorReadings(limit: int = 500) -> pd.DataFrame:
+    """Per-row sensor readings from `silver.sensor` for time-series trends."""
+    sql = f"""
+        SELECT
+            filename,
+            event_time,
+            temperature,
+            humidity,
+            soil_moisture
+        FROM `{PROJECT_ID}.{SILVER_DATASET}.sensor`
+        ORDER BY event_time DESC
+        LIMIT {int(limit)}
+    """
+    df = _runQuery(sql)
+    if not df.empty:
+        df["event_time"] = _toNaiveUtc(df["event_time"])
+        for col in ("temperature", "humidity", "soil_moisture"):
+            if col in df.columns:
+                df[col] = _coerceNumeric(df[col])
+    return df
+
+
+@st.cache_data(ttl=60, show_spinner="Loading plant health...")
+def _loadPlantHealth(limit: int = 50) -> pd.DataFrame:
+    """Image predictions joined with aggregated sensor envelope.
+
+    Reads `gold.plant_health` directly. The `heatmap` column carries a
+    JSON array of `[x, y]` pixel coordinates from Gemini Vision.
+    """
+    sql = f"""
+        SELECT
+            filename,
+            event_time,
+            plant_type,
+            health_status,
+            confidence,
+            severity,
+            summary,
+            possible_issues,
+            recommendations,
+            heatmap,
+            avg_temperature,
+            avg_humidity,
+            avg_soil_moisture
+        FROM `{PROJECT_ID}.{GOLD_DATASET}.plant_health`
+        ORDER BY event_time DESC
+        LIMIT {int(limit)}
+    """
+    df = _runQuery(sql)
+    if not df.empty:
+        df["event_time"] = _toNaiveUtc(df["event_time"])
+        for col in (
+            "confidence",
+            "severity",
+            "avg_temperature",
+            "avg_humidity",
+            "avg_soil_moisture",
+        ):
+            if col in df.columns:
+                df[col] = _coerceNumeric(df[col])
+    return df
+
+
+@st.cache_data(ttl=300, show_spinner="Loading weather...")
+def _loadWeather(limit: int = 200) -> pd.DataFrame:
+    """Per-interval weather from `silver.weather`."""
+    sql = f"""
+        SELECT *
+        FROM `{PROJECT_ID}.{SILVER_DATASET}.weather`
+        ORDER BY datetime_utc ASC
+        LIMIT {int(limit)}
+    """
+    df = _runQuery(sql)
+    if not df.empty:
+        df["datetime_utc"] = _toNaiveUtc(df["datetime_utc"])
+        if "datetime_local" in df.columns:
+            df["datetime_local"] = _toNaiveUtc(df["datetime_local"])
+        # Coerce string-typed columns that should be text
+        for col in ("adm4", "kotkab", "kecamatan", "desa", "weather_desc", "weather_desc_en"):
+            if col in df.columns:
+                df[col] = df[col].astype(str).replace("None", "")
+        # Coerce numeric columns
+        for col in ("temperature", "humidity", "precipitation_mm", "wind_speed"):
+            if col in df.columns:
+                df[col] = _coerceNumeric(df[col])
+    return df
+
+
+# ───────────────────────────── Dashboard class ───────────────────────────────
 
 class Dashboard:
     """Streamlit dashboard for the Smart Plant Monitoring System."""
@@ -39,39 +187,20 @@ class Dashboard:
         # Derived
         self.metrics: Metrics = Metrics()
         self.vision: VisionInsight = VisionInsight()
-
-    
-    @staticmethod
-    @st.cache_data(ttl=60, show_spinner="Loading sensor data...")
-    def _loadSensor() -> pd.DataFrame:
-        try:
-            return getSensorReadings(500)
-        except Exception as exc:
-            st.warning(f"Sensor data unavailable: {exc}")
-            return pd.DataFrame()
+        self.heatmapPoints: list[tuple[float, float]] = []
 
     @staticmethod
-    @st.cache_data(ttl=60, show_spinner="Loading plant health...")
-    def _loadHealth() -> pd.DataFrame:
+    def _safeLoad(loader, label: str) -> pd.DataFrame:
         try:
-            return getPlantHealth(50)
+            return loader()
         except Exception as exc:
-            st.warning(f"Plant health data unavailable: {exc}")
-            return pd.DataFrame()
-
-    @staticmethod
-    @st.cache_data(ttl=300, show_spinner="Loading weather...")
-    def _loadWeather() -> pd.DataFrame:
-        try:
-            return getWeatherForecast(200)
-        except Exception as exc:
-            st.warning(f"Weather data unavailable: {exc}")
+            st.warning(f"{label} unavailable: {exc}")
             return pd.DataFrame()
 
     def loadData(self):
-        self.sensorDf = self._loadSensor()
-        self.healthDf = self._loadHealth()
-        self.weatherDf = self._loadWeather()
+        self.sensorDf = self._safeLoad(lambda: _loadSensorReadings(500), "Sensor data")
+        self.healthDf = self._safeLoad(lambda: _loadPlantHealth(50), "Plant health data")
+        self.weatherDf = self._safeLoad(lambda: _loadWeather(200), "Weather data")
         self._computeMetrics()
         self._computeVision()
 
@@ -103,6 +232,7 @@ class Dashboard:
 
     def _computeVision(self):
         v = VisionInsight()
+        self.heatmapPoints = []
         if self.healthDf.empty:
             self.vision = v
             return
@@ -136,29 +266,44 @@ class Dashboard:
         v.summary = str(latest.get("summary") or "No summary available.")
         self.vision = v
 
-    
+        # Pixel/heatmap points (from gold.plant_health → heatmap column)
+        if "heatmap" in self.healthDf.columns:
+            self.heatmapPoints = parsePixelPoints(latest.get("heatmap"))
+
     def _resolveLeafImage(self) -> tuple[Optional[str], str]:
         """Return (data_uri, caption). Caller decides how to render."""
+        candidatePath: Optional[Path] = None
         if self.vision.available and self.vision.filename:
             candidate = self.imageDir / self.vision.filename
-            ts = (
-                self.vision.eventTime.strftime("%Y-%m-%d %H:%M:%S")
-                if self.vision.eventTime is not None
-                else ""
-            )
             if candidate.exists():
-                return imageDataUri(candidate), f"ESP32-CAM • {ts}".rstrip(" •")
-        if self.imageDir.exists():
+                candidatePath = candidate
+        if candidatePath is None and self.imageDir.exists():
             jpgs = sorted(
                 self.imageDir.glob("*.jpg"),
                 key=lambda p: p.stat().st_mtime,
                 reverse=True,
             )
             if jpgs:
-                return imageDataUri(jpgs[0]), f"ESP32-CAM • {jpgs[0].name}"
-        return None, "ESP32-CAM"
+                candidatePath = jpgs[0]
 
-    
+        if candidatePath is None:
+            return None, "ESP32-CAM"
+
+        ts = (
+            self.vision.eventTime.strftime("%Y-%m-%d %H:%M:%S")
+            if self.vision.eventTime is not None
+            else ""
+        )
+        caption = f"ESP32-CAM • {ts}".rstrip(" •") if ts else f"ESP32-CAM • {candidatePath.name}"
+
+        # If we have heatmap points, render the matplotlib overlay.
+        if self.heatmapPoints:
+            overlay = renderHeatmapOverlay(candidatePath, self.heatmapPoints)
+            if overlay is not None:
+                return overlay, f"{caption} • heatmap"
+
+        return imageDataUri(candidatePath), caption
+
     def renderPageSetup(self):
         st.set_page_config(
             page_title="Smart Plant Monitoring",
@@ -245,7 +390,6 @@ class Dashboard:
             self._renderImageCard()
         with metricsCol:
             m = self.metrics
-            # ✅ Native columns — no CSS grid, no sanitizer interference
             c1, c2, c3, c4 = st.columns(4, gap="small")
 
             with c1:
@@ -287,13 +431,18 @@ class Dashboard:
 
         if v.available:
             alertClass = "ok" if v.isHealthy else ""
+            heatPill = (
+                f'<span class="pill" style="margin-left:6px; background:#FEF3C7; color:#92400E;">{len(self.heatmapPoints)} pts</span>'
+                if self.heatmapPoints
+                else ""
+            )
             alertHtml = f"""
               <div class="sp-alert {alertClass}" style="margin-top:12px;">
                 <div class="row">
                   <div>Status Alert</div>
                   <div class="pill">{v.badge}</div>
                 </div>
-                <div class="title">{v.title}</div>
+                <div class="title">{v.title}{heatPill}</div>
               </div>
             """
         else:
@@ -325,47 +474,48 @@ class Dashboard:
 
         if self.sensorDf.empty:
             st.info("No sensor readings available yet.")
-        else:
-            cutoff = self.sensorDf["event_time"].max() - timedelta(hours=24)
-            last24 = self.sensorDf[self.sensorDf["event_time"] >= cutoff].sort_values(
-                "event_time"
-            )
-            if last24.empty:
-                last24 = self.sensorDf.sort_values("event_time").tail(50)
+            return
 
-            isTemp = view == "Temperature"
-            series = last24["temperature"] if isTemp else last24["humidity"]
-            yUnit = "°C" if isTemp else "%"
-            color = "#DC2626" if isTemp else "#2563EB"
-            fillColor = "rgba(220,38,38,0.10)" if isTemp else "rgba(37,99,235,0.10)"
+        cutoff = self.sensorDf["event_time"].max() - timedelta(hours=24)
+        last24 = self.sensorDf[self.sensorDf["event_time"] >= cutoff].sort_values(
+            "event_time"
+        )
+        if last24.empty:
+            last24 = self.sensorDf.sort_values("event_time").tail(50)
 
-            fig = go.Figure(
-                data=go.Scatter(
-                    x=last24["event_time"],
-                    y=series,
-                    mode="lines",
-                    line=dict(color=color, width=3, shape="spline", smoothing=0.8),
-                    fill="tozeroy",
-                    fillcolor=fillColor,
-                    hovertemplate=f"%{{x|%H:%M}}<br>%{{y:.1f}}{yUnit}<extra></extra>",
-                )
+        isTemp = view == "Temperature"
+        series = last24["temperature"] if isTemp else last24["humidity"]
+        yUnit = "°C" if isTemp else "%"
+        color = "#DC2626" if isTemp else "#2563EB"
+        fillColor = "rgba(220,38,38,0.10)" if isTemp else "rgba(37,99,235,0.10)"
+
+        fig = go.Figure(
+            data=go.Scatter(
+                x=last24["event_time"],
+                y=series,
+                mode="lines",
+                line=dict(color=color, width=3, shape="spline", smoothing=0.8),
+                fill="tozeroy",
+                fillcolor=fillColor,
+                hovertemplate=f"%{{x|%H:%M}}<br>%{{y:.1f}}{yUnit}<extra></extra>",
             )
-            fig.update_layout(
-                margin=dict(l=10, r=10, t=10, b=10),
-                height=240,
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False, color="#64748B", linecolor="#E5E7EB"),
-                yaxis=dict(
-                    showgrid=True,
-                    gridcolor="#F1F5F9",
-                    color="#64748B",
-                    ticksuffix=f" {yUnit}",
-                ),
-                showlegend=False,
-                hoverlabel=dict(bgcolor="#0F172A", font_color="#fff"),
-            )
-            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+        )
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=10),
+            height=240,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False, color="#64748B", linecolor="#E5E7EB"),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor="#F1F5F9",
+                color="#64748B",
+                ticksuffix=f" {yUnit}",
+            ),
+            showlegend=False,
+            hoverlabel=dict(bgcolor="#0F172A", font_color="#fff"),
+        )
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     def renderVisionDetails(self):
         v = self.vision
@@ -425,6 +575,13 @@ class Dashboard:
         actionParts.append("</div>")
         actionsHtml = "".join(actionParts)
 
+        heatmapNote = (
+            f'<div class="lbl">Heatmap</div>'
+            f'<div class="body">{len(self.heatmapPoints)} pixel points overlaid on capture.</div>'
+            if self.heatmapPoints
+            else ""
+        )
+
         st.markdown(
             f"""
             <br/>
@@ -447,6 +604,8 @@ class Dashboard:
 
               <div class="lbl">Recommendations</div>
               {recsHtml}
+
+              {heatmapNote}
             </div>
 
             {actionsHtml}
@@ -530,7 +689,7 @@ class Dashboard:
 
     def run(self):
         self.renderPageSetup()
-        self.renderSidebar()
+        # self.renderSidebar()
         self.renderHeader()
         self.loadData()
         self.renderInsightsBanner()

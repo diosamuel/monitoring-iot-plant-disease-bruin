@@ -42,6 +42,9 @@ columns:
   - name: recommendations
     type: STRING
     description: JSON array of recommendations
+  - name: heatmap
+    type: STRING
+    description: JSON array of [x, y] pixel coordinates
   - name: reading_count
     type: INT64
     description: number of sensor readings for this image period
@@ -70,6 +73,7 @@ SELECT
     i.summary,
     i.possible_issues,
     i.recommendations,
+    i.heatmap,
     agg.reading_count,
     agg.avg_temperature,
     agg.avg_humidity,

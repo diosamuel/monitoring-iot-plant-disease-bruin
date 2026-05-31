@@ -50,3 +50,6 @@ columns:
   - name: recommendations
     type: STRING
     description: JSON array of recommendations
+  - name: heatmap
+    type: STRING
+    description: JSON array of [x, y] pixel coordinates
