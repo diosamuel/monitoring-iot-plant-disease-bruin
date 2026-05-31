@@ -25,7 +25,7 @@ SERVICE_ACCOUNT_FILE = os.getenv(
 
 
 @lru_cache(maxsize=1)
-def _client() -> bigquery.Client:
+def bqClient() -> bigquery.Client:
     creds = service_account.Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE,
         scopes=["https://www.googleapis.com/auth/cloud-platform"],
@@ -33,37 +33,18 @@ def _client() -> bigquery.Client:
     return bigquery.Client(project=PROJECT_ID, credentials=creds)
 
 
-def _query(sql: str) -> pd.DataFrame:
-    return _client().query(sql).result().to_dataframe(create_bqstorage_client=False)
+def runQuery(sql: str) -> pd.DataFrame:
+    return bqClient().query(sql).result().to_dataframe(create_bqstorage_client=False)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
-def get_sensor_readings(limit: int = 500) -> pd.DataFrame:
-    sql = f"""
-        SELECT filename, event_time, temperature, humidity, soil_moisture, ingested_at
-        FROM `{PROJECT_ID}.{DATASET}.sensor_readings`
-        ORDER BY event_time DESC
-        LIMIT {int(limit)}
-    """
-    df = _query(sql)
-    if not df.empty:
-        df["event_time"] = _to_naive_utc(df["event_time"])
-    return df
-
-
-def _to_naive_utc(series: pd.Series) -> pd.Series:
-    """Convert a datetime series to tz-naive UTC.
-
-    BigQuery TIMESTAMP columns come back as tz-aware (UTC). The dashboard mixes
-    them with naive datetimes from datetime.utcnow(), so we strip the tz here
-    to keep arithmetic consistent.
-    """
+def toNaiveUtc(series: pd.Series) -> pd.Series:
+    """Convert a datetime series to tz-naive UTC."""
     s = pd.to_datetime(series, errors="coerce", utc=True)
     return s.dt.tz_convert(None) if s.dt.tz is not None else s
 
 
-def _coerce_numeric(series: pd.Series) -> pd.Series:
-    """Strip '%' / units and coerce to float, leaving non-parseable values as NaN."""
+def coerceNumeric(series: pd.Series) -> pd.Series:
+    """Strip percent signs / units and coerce to float, NaN on failure."""
     if series.dtype.kind in "fiu":
         return series.astype(float)
     cleaned = (
@@ -76,7 +57,21 @@ def _coerce_numeric(series: pd.Series) -> pd.Series:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def get_plant_health(limit: int = 50) -> pd.DataFrame:
+def getSensorReadings(limit: int = 500) -> pd.DataFrame:
+    sql = f"""
+        SELECT filename, event_time, temperature, humidity, soil_moisture, ingested_at
+        FROM `{PROJECT_ID}.{DATASET}.sensor_readings`
+        ORDER BY event_time DESC
+        LIMIT {int(limit)}
+    """
+    df = runQuery(sql)
+    if not df.empty:
+        df["event_time"] = toNaiveUtc(df["event_time"])
+    return df
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def getPlantHealth(limit: int = 50) -> pd.DataFrame:
     sql = f"""
         SELECT
             filename, event_time, plant_type, health_status, confidence,
@@ -86,17 +81,17 @@ def get_plant_health(limit: int = 50) -> pd.DataFrame:
         ORDER BY event_time DESC
         LIMIT {int(limit)}
     """
-    df = _query(sql)
+    df = runQuery(sql)
     if not df.empty:
-        df["event_time"] = _to_naive_utc(df["event_time"])
+        df["event_time"] = toNaiveUtc(df["event_time"])
         for col in ("confidence", "severity", "temperature", "humidity", "soil_moisture"):
             if col in df.columns:
-                df[col] = _coerce_numeric(df[col])
+                df[col] = coerceNumeric(df[col])
     return df
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def get_weather_forecast(limit: int = 200) -> pd.DataFrame:
+def getWeatherForecast(limit: int = 200) -> pd.DataFrame:
     sql = f"""
         SELECT
             adm4, kotkab, kecamatan, desa, datetime_utc, datetime_local,
@@ -106,14 +101,14 @@ def get_weather_forecast(limit: int = 200) -> pd.DataFrame:
         ORDER BY datetime_utc ASC
         LIMIT {int(limit)}
     """
-    df = _query(sql)
+    df = runQuery(sql)
     if not df.empty:
-        df["datetime_utc"] = _to_naive_utc(df["datetime_utc"])
-        df["datetime_local"] = _to_naive_utc(df["datetime_local"])
+        df["datetime_utc"] = toNaiveUtc(df["datetime_utc"])
+        df["datetime_local"] = toNaiveUtc(df["datetime_local"])
     return df
 
 
-def parse_json_list(value) -> list[str]:
+def parseJsonList(value) -> list[str]:
     """possible_issues / recommendations are stored as JSON-encoded strings."""
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return []
