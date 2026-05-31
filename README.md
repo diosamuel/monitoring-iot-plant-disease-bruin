@@ -14,9 +14,9 @@ is split across three layers so each device only does work that fits its
 resource budget:
 
 - **ESP32 / ESP32-CAM** — data acquisition (sensors + camera)
-- **Raspberry Pi 3B** — edge computing (TFLite inference, preprocessing)
-- **VPS** — message broker, staging DB, Bruin data pipeline, ETL
-- **BigQuery** — analytical data warehouse
+- **Raspberry Pi 3B** — edge computing (MQTT ingest, preprocessing)
+- **VPS** — message broker, staging DB, Bruin data pipeline
+- **BigQuery** — analytical data warehouse (gold layer)
 - **Streamlit** — operator dashboard
 
 ---
@@ -25,98 +25,44 @@ resource budget:
 
 ![architecture](./architecture.png)
 
-```text
-ESP32 / ESP32-CAM
-        │
-        ▼
-Raspberry Pi 3B (edge inference, TFLite)
-        │  MQTT
-        ▼
-VPS
- ├─ Mosquitto (broker)
- ├─ Ingestor  (MQTT → DuckDB)
- ├─ DuckDB    (staging: sources/)
- ├─ Bruin     (raw → silver → gold)
- └─ ETL       (gold → BigQuery)
-        │
-        ▼
-BigQuery  ──►  Streamlit Dashboard
-```
-
----
-
-## Project Structure
-
-```
-├── api/                    # FastAPI prediction service (Gemini Vision)
-│   ├── index.py
-│   ├── system_prompt.txt
-│   ├── preprocess/         # Image preprocessing
-│   └── images/             # Captured images (gitignored)
-├── esp32/                  # Device firmware
-│   ├── esp32cam/           # Camera web server
-│   └── sensor/             # DHT11 + soil moisture
-├── mosquitto/              # MQTT broker config
-│   ├── config/
-│   └── subscribe.py
-├── sources/                # DuckDB staging databases + schemas
-│   ├── stg_sensor.duckdb
-│   ├── stg_sensor.sql
-│   ├── stg_image.duckdb
-│   ├── stg_image.sql
-│   ├── stg_weather.duckdb
-│   └── stg_weather.sql
-├── modelling/              # Bruin data pipeline
-│   ├── pipeline.yml
-│   ├── assets/
-│   │   ├── raw/            # Source declarations (lineage entry points)
-│   │   ├── silver/         # DuckDB transformations
-│   │   └── gold/           # BigQuery output tables
-│   └── logs/
-├── simulate/               # Simulator scripts for testing
-│   ├── cam.py              # Camera capture simulator
-│   ├── dht22.py            # Temperature/humidity simulator
-│   ├── soil.py             # Soil moisture simulator
-│   └── weather.py          # BMKG weather API fetcher
-├── secrets/                # GCP service account (gitignored)
-├── docker-compose.yaml
-├── .bruin.yml              # Bruin connections config (gitignored)
-└── .env.example
-```
-
 ---
 
 ## Data Pipeline (Bruin)
 
 The pipeline follows a **medallion architecture** (raw → silver → gold)
-with full lineage tracking:
+with full lineage tracking. Runs every 12 hours (`0 */12 * * *`).
 
-```
-raw.sensor ──────────→ silver.sensor ──────→ gold.sensor_readings
-                                        └──→ gold.plant_health
-raw.image_log ───────┐
-raw.image_analytics ─┴→ silver.image ──────→ gold.plant_health
+### Layers
 
-raw.bmkg_weather ────→ silver.weather ─────→ gold.weather_forecast
-```
+| Layer  | Storage  | Connection        | Description                              |
+|--------|----------|-------------------|------------------------------------------|
+| Raw    | DuckDB   | per-domain        | `read_json_auto` from JSONL sources      |
+| Silver | DuckDB   | per-domain        | Cleaned, joined, normalized tables       |
+| Silver | BigQuery | gcp-default       | Ingested via `ingestr` (replace strategy) |
+| Gold   | BigQuery | gcp-default       | Aggregated analytics-ready tables        |
 
-| Layer  | Storage | Description |
-|--------|---------|-------------|
-| Raw    | DuckDB  | Source declarations for staging tables |
-| Silver | DuckDB  | Cleaned, renamed, normalized tables |
-| Gold   | BigQuery | Analytics-ready tables for dashboard |
+### Gold Tables
 
-### Running the pipeline
+| Table                    | Description                                         |
+|--------------------------|-----------------------------------------------------|
+| `gold.sensor_readings`   | Aggregated sensor stats per image (avg/min/max)     |
+| `gold.plant_health`      | Image predictions + aggregated sensor environment   |
+| `gold.weather_forecast`  | Daily weather summary per location                  |
+
+### Running the Pipeline
 
 ```bash
-# Run from project root
-cd /path/to/smart-plant-monitoring
-
-# Run full pipeline
+# Full pipeline (all layers)
 bruin run modelling/
 
-# Run a single asset
-bruin run modelling/assets/silver/silver_weather.sql
+# Single asset
+bruin run modelling/assets/silver/silver_sensor.sql
+
+# Ingest silver to BigQuery
+bruin run modelling/assets/silver/silver_sensor.asset.yml
+
+# Gold layer only
+bruin run modelling/assets/gold/gold_sensor_readings.sql
 
 # View lineage
 bruin lineage modelling/
@@ -124,27 +70,40 @@ bruin lineage modelling/
 
 ---
 
-## Staging Tables
+## Staging Sources
 
-| Table | Database | Source |
-|-------|----------|--------|
-| `sensor` | `stg_sensor.duckdb` | ESP32 DHT11 + soil via MQTT |
-| `image_log` | `stg_image.duckdb` | ESP32-CAM captures |
-| `image_analytics` | `stg_image.duckdb` | Gemini Vision predictions |
-| `bmkg_weather` | `stg_weather.duckdb` | BMKG weather API (JSON) |
+| File                     | DuckDB Connection | Raw Table            | Source                        |
+|--------------------------|-------------------|----------------------|-------------------------------|
+| `esp32_sensor.jsonl`     | duckdb-sensor     | `raw.sensor`         | ESP32 DHT11 + soil via MQTT   |
+| `image-log.jsonl`        | duckdb-image      | `raw.image_log`      | ESP32-CAM capture timestamps  |
+| `image-analytics.jsonl`  | duckdb-image      | `raw.image_analytics`| Gemini Vision predictions     |
+| `bmkg_weather.jsonl`     | duckdb-weather    | `raw.bmkg_weather`   | BMKG weather API (JSON)       |
 
 ---
 
 ## Simulators
 
-Scripts in `simulate/` populate staging databases for local development:
+Scripts in `simulate/` populate JSONL source files for local development:
 
 ```bash
-python simulate/weather.py    # Fetch BMKG forecast → stg_weather.duckdb
-python simulate/dht22.py      # Simulate sensor readings → stg_sensor.duckdb
-python simulate/soil.py       # Simulate soil moisture → stg_sensor.duckdb
-python simulate/cam.py        # Simulate camera capture → stg_image.duckdb
+python simulate/weather.py      # Fetch BMKG forecast → sources/bmkg_weather.jsonl
+python simulate/dht22_soil.py   # Simulate sensor readings → sources/esp32_sensor.jsonl
+python simulate/cam.py          # Simulate camera capture → sources/image-log.jsonl
 ```
+
+---
+
+## BigQuery Schema
+
+The `schema/bq.sql` file contains `CREATE OR REPLACE TABLE` statements
+for all silver and gold tables in BigQuery under project `learngcp-461809`:
+
+- `learngcp-461809.silver.sensor`
+- `learngcp-461809.silver.image`
+- `learngcp-461809.silver.weather`
+- `learngcp-461809.gold.sensor_readings`
+- `learngcp-461809.gold.plant_health`
+- `learngcp-461809.gold.weather_forecast`
 
 ---
 
@@ -154,41 +113,34 @@ python simulate/cam.py        # Simulate camera capture → stg_image.duckdb
 cp .env.example .env
 ```
 
-| Variable | Default | Used by |
-|----------|---------|---------|
-| `BQ_PROJECT_ID` | `your-gcp-project` | Gold layer, ETL, Dashboard |
-| `BQ_DATASET` | `smart_plant` | Gold layer, ETL, Dashboard |
-| `GEMINI_API_KEY` | — | API prediction service |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | API prediction service |
+| Variable         | Default             | Used by                     |
+|------------------|---------------------|-----------------------------|
+| `BQ_PROJECT_ID`  | `your-gcp-project`  | Gold layer, Dashboard       |
+| `BQ_DATASET`     | `smart_plant`       | Gold layer, Dashboard       |
+| `GEMINI_API_KEY` | —                   | API prediction service      |
+| `GEMINI_MODEL`   | `gemini-2.5-flash`  | API prediction service      |
 
-Place your Google service account JSON at `./secrets/gcp-sa.json`.
+Place your Google service account JSON at `./secrets/gcp-secrets.json`.
 
----
-
-## Docker Compose Services
-
-| Service | Port | Role |
-|---------|------|------|
-| `mosquitto` | 1883, 9001 | MQTT broker |
-| `ingestor` | — | MQTT → DuckDB |
-| `bruin` | — | One-shot pipeline run |
-| `etl` | — | DuckDB gold → BigQuery |
-| `dashboard` | 8501 | Streamlit UI |
-
+Bruin connections are configured in `.bruin.yml`:
+- `gcp-default` — BigQuery (project: `learngcp-461809`)
+- `duckdb-sensor` — `modelling/assets/staging/stg_sensor.duckdb`
+- `duckdb-image` — `modelling/assets/staging/stg_image.duckdb`
+- `duckdb-weather` — `modelling/assets/staging/stg_weather.duckdb`
 
 ---
 
 ## Technology Stack
 
-| Category | Technology |
-|----------|-----------|
-| IoT Devices | ESP32, ESP32-CAM |
-| Sensors | DHT11, Soil Moisture |
-| Edge Computing | Raspberry Pi 3B |
-| AI Inference | TensorFlow Lite, Gemini Vision |
-| Messaging | MQTT (Mosquitto) |
-| Staging Database | DuckDB |
-| Data Pipeline | Bruin |
-| Data Warehouse | Google BigQuery |
-| Dashboard | Streamlit |
-| Orchestration | Docker Compose |
+| Category         | Technology                    |
+|------------------|-------------------------------|
+| IoT Devices      | ESP32, ESP32-CAM              |
+| Sensors          | DHT11, Soil Moisture (ADC)    |
+| Edge Computing   | Raspberry Pi 3B               |
+| AI Inference     | Gemini 2.5 Flash (Vision)     |
+| Messaging        | MQTT (Mosquitto)              |
+| Staging Database | DuckDB                        |
+| Data Pipeline    | Bruin                         |
+| Data Warehouse   | Google BigQuery               |
+| Dashboard        | Streamlit                     |
+| Package Manager  | uv (Python)                   |
