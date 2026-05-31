@@ -8,6 +8,7 @@ materialization:
 
 depends:
   - raw.sensor
+  - raw.image_log
 
 columns:
   - name: filename
@@ -31,11 +32,23 @@ columns:
     description: soil moisture raw ADC value
 @bruin */
 
+WITH image_log AS (
+    SELECT
+        CAST(filename AS VARCHAR)     AS filename,
+        CAST(event_time AS TIMESTAMP) AS event_time
+    FROM read_json_auto('sources/image-log.jsonl')
+),
+sensor AS (
+    SELECT *
+    FROM raw.sensor
+    WHERE event_time IS NOT NULL
+)
 SELECT
-    filename,
-    event_time,
-    temp   AS temperature,
-    humid  AS humidity,
-    soil   AS soil_moisture
-FROM raw.sensor
-WHERE event_time IS NOT NULL
+    i.filename,
+    s.event_time,
+    s.temp   AS temperature,
+    s.humid  AS humidity,
+    s.soil   AS soil_moisture
+FROM sensor s
+ASOF JOIN image_log i
+    ON s.event_time >= i.event_time

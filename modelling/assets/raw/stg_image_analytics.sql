@@ -38,6 +38,7 @@ SELECT
     json_extract_string(response::JSON, '$.summary')          AS summary,
     json_extract(response::JSON, '$.possible_issues')::VARCHAR   AS possible_issues,
     json_extract(response::JSON, '$.recommendations')::VARCHAR   AS recommendations,
+    json_extract(response::JSON, '$.pixel')::VARCHAR as heatmap,
     CURRENT_TIMESTAMP AS event_time
 FROM read_json('sources/image-analytics.jsonl',
     columns={

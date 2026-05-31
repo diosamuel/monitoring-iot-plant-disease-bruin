@@ -28,12 +28,6 @@ columns:
   - name: health_status
     type: string
     description: health classification (healthy, diseased, unknown)
-    checks:
-      - name: accepted_values
-        value:
-          - healthy
-          - diseased
-          - unknown
   - name: confidence
     type: float
     description: model confidence score (0.0 to 1.0)

@@ -1,6 +1,6 @@
 /* @bruin
 
-name: gold_edw.weather_forecast
+name: gold.weather_forecast
 type: bq.sql
 materialization:
   type: table
@@ -10,6 +10,11 @@ depends:
   - silver.weather
 
 columns:
+  - name: forecast_date
+    type: DATE
+    description: forecast date (aggregation key)
+    checks:
+      - name: not_null
   - name: adm4
     type: STRING
     description: administrative level 4 code
@@ -36,81 +41,67 @@ columns:
   - name: timezone
     type: STRING
     description: timezone string
-  - name: datetime_utc
-    type: TIMESTAMP
-    description: forecast datetime in UTC
-    checks:
-      - name: not_null
-  - name: datetime_local
-    type: TIMESTAMP
-    description: forecast datetime in local time
-  - name: analysis_date
-    type: TIMESTAMP
-    description: analysis/issue date
-  - name: temperature
-    type: FLOAT64
-    description: temperature in Celsius
-  - name: total_cloud_cover
-    type: FLOAT64
-    description: total cloud cover percentage
-  - name: precipitation_mm
-    type: FLOAT64
-    description: total precipitation in mm
-  - name: humidity
-    type: FLOAT64
-    description: humidity percentage
-  - name: wind_speed
-    type: FLOAT64
-    description: wind speed
-  - name: wind_direction_deg
-    type: FLOAT64
-    description: wind direction in degrees
-  - name: wind_from
-    type: STRING
-    description: wind from direction
-  - name: wind_to
-    type: STRING
-    description: wind to direction
-  - name: visibility_meters
-    type: FLOAT64
-    description: visibility in meters
-  - name: weather_code
+  - name: forecast_count
     type: INT64
-    description: BMKG weather code
-  - name: weather_desc
-    type: STRING
-    description: weather description (Indonesian)
-  - name: weather_desc_en
-    type: STRING
-    description: weather description (English)
+    description: number of forecast entries for this day
+  - name: avg_temperature
+    type: FLOAT64
+    description: daily average temperature in Celsius
+  - name: min_temperature
+    type: FLOAT64
+    description: daily minimum temperature in Celsius
+  - name: max_temperature
+    type: FLOAT64
+    description: daily maximum temperature in Celsius
+  - name: avg_humidity
+    type: FLOAT64
+    description: daily average humidity percentage
+  - name: total_precipitation_mm
+    type: FLOAT64
+    description: total daily precipitation in mm
+  - name: avg_cloud_cover
+    type: FLOAT64
+    description: daily average cloud cover percentage
+  - name: avg_wind_speed
+    type: FLOAT64
+    description: daily average wind speed
+  - name: min_visibility_meters
+    type: FLOAT64
+    description: minimum visibility in meters
   - name: ingested_at
     type: TIMESTAMP
     description: pipeline run timestamp
 @bruin */
 
+-- Gold layer: daily aggregated weather forecast
 SELECT
-    adm4,
-    provinsi,
-    kotkab,
-    kecamatan,
-    desa,
-    lon,
-    lat,
-    timezone,
-    datetime_utc,
-    datetime_local,
-    analysis_date,
-    temperature,
-    total_cloud_cover,
-    precipitation_mm,
-    humidity,
-    wind_speed,
-    wind_direction_deg,
-    wind_from,
-    wind_to,
-    visibility_meters,
-    weather_code,
-    weather_desc,
-    weather_desc_en,
-    CURRENT_TIMESTAMP AS ingested_at
+    DATE(datetime_local)                          AS forecast_date,
+    STRING(adm4)                                  AS adm4,
+    STRING(provinsi)                              AS provinsi,
+    STRING(kotkab)                                AS kotkab,
+    STRING(kecamatan)                             AS kecamatan,
+    STRING(desa)                                  AS desa,
+    FLOAT64(lon)                                  AS lon,
+    FLOAT64(lat)                                  AS lat,
+    STRING(timezone)                              AS timezone,
+    COUNT(*)                                      AS forecast_count,
+    AVG(temperature)                              AS avg_temperature,
+    MIN(temperature)                              AS min_temperature,
+    MAX(temperature)                              AS max_temperature,
+    AVG(humidity)                                 AS avg_humidity,
+    SUM(precipitation_mm)                         AS total_precipitation_mm,
+    AVG(total_cloud_cover)                        AS avg_cloud_cover,
+    AVG(wind_speed)                               AS avg_wind_speed,
+    MIN(visibility_meters)                        AS min_visibility_meters,
+    CURRENT_TIMESTAMP()                           AS ingested_at
 FROM silver.weather
+GROUP BY
+    DATE(datetime_local),
+    STRING(adm4),
+    STRING(provinsi),
+    STRING(kotkab),
+    STRING(kecamatan),
+    STRING(desa),
+    FLOAT64(lon),
+    FLOAT64(lat),
+    STRING(timezone)

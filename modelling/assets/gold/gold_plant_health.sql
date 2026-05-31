@@ -1,6 +1,6 @@
 /* @bruin
 
-name: gold_edw.plant_health
+name: gold.plant_health
 type: bq.sql
 materialization:
   type: table
@@ -42,21 +42,24 @@ columns:
   - name: recommendations
     type: STRING
     description: JSON array of recommendations
-  - name: temperature
+  - name: reading_count
+    type: INT64
+    description: number of sensor readings for this image period
+  - name: avg_temperature
     type: FLOAT64
-    description: temperature at capture time
-  - name: humidity
+    description: average temperature at capture period
+  - name: avg_humidity
     type: FLOAT64
-    description: humidity at capture time
-  - name: soil_moisture
+    description: average humidity at capture period
+  - name: avg_soil_moisture
     type: FLOAT64
-    description: soil moisture at capture time
+    description: average soil moisture at capture period
   - name: ingested_at
     type: TIMESTAMP
     description: pipeline run timestamp
 @bruin */
 
--- Gold layer: join image predictions with sensor readings for a complete plant health view
+-- Gold layer: join image predictions with aggregated sensor readings for a complete plant health view
 SELECT
     i.filename,
     i.event_time,
@@ -67,10 +70,20 @@ SELECT
     i.summary,
     i.possible_issues,
     i.recommendations,
-    s.temperature,
-    s.humidity,
-    s.soil_moisture,
-    CURRENT_TIMESTAMP AS ingested_at
+    agg.reading_count,
+    agg.avg_temperature,
+    agg.avg_humidity,
+    agg.avg_soil_moisture,
+    CURRENT_TIMESTAMP() AS ingested_at
 FROM silver.image i
-LEFT JOIN silver.sensor s
-    ON i.filename = s.filename
+LEFT JOIN (
+    SELECT
+        filename,
+        COUNT(*)           AS reading_count,
+        AVG(temperature)   AS avg_temperature,
+        AVG(humidity)      AS avg_humidity,
+        AVG(soil_moisture) AS avg_soil_moisture
+    FROM silver.sensor
+    GROUP BY filename
+) agg
+    ON i.filename = agg.filename
