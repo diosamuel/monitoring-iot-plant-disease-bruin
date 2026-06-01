@@ -9,7 +9,7 @@ import time
 import random
 
 # Simple configuration
-broker = "192.168.1.39"
+broker = "localhost"
 port = 1883
 topic = "esp32/dht22"
 
@@ -24,7 +24,7 @@ def main():
         client.loop_start()
         
         while True:
-            # Generate random temperature (20-30°C) and humidity (40-80%)zzzzzzz
+            # Generate random temperature (20-30°C) and humidity (40-80%)
             temp = round(20 + random.random() * 10, 1)
             humid = round(40 + random.random() * 40, 1)
             soil = round(50 + random.random() * 50, 1)

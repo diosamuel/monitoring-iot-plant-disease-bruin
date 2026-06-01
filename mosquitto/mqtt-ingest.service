@@ -1,0 +1,14 @@
+[Unit]
+Description=MQTT Ingest
+After=network.target
+
+[Service]
+user=diosamuel
+WorkingDirectory=/home/pi/program/monitoring-iot-plant-disease-bruin
+ExecStart=/home/pi/.local/bin/uv run python3 /home/pi/program/monitoring-iot-plant-disease-bruin/ingest/subscribe.py
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

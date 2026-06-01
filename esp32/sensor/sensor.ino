@@ -10,9 +10,9 @@
 const char* ssid = "SigmaFam";
 const char* password = "MIMPIsukses";
 
-const char* mqtt_server = "192.168.1.23";
+const char* mqtt_server = "192.168.1.29";
 const int mqtt_port = 1883;
-const char* mqtt_topic = "plant/sensor";
+const char* mqtt_topic = "esp32/sensor";
 
 WiFiClient espClient;
 PubSubClient client(espClient);

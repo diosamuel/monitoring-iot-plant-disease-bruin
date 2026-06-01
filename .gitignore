@@ -13,8 +13,8 @@ logs/runs
 logs/*.log
 *.py[cod]
 
-api/images/*
-!api/images/.gitkeep
+# api/images/*
+# !api/images/.gitkeep
 
 sources/*.duckdb
 

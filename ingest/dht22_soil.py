@@ -9,7 +9,7 @@ load_dotenv()
 
 BROKER_HOST = os.getenv("MQTT_HOST")
 BROKER_PORT = int(os.getenv("MQTT_PORT"))
-TOPIC = "esp32/dht22"
+TOPIC = "esp32/sensor"
 
 JSONL_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "esp32_sensor.jsonl")
 
