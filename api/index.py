@@ -35,8 +35,6 @@ with open(PROMPT_PATH, "r") as f:
     PREDICT_PROMPT = f.read()
 IMAGE_LOG_PATH = os.path.join(SOURCES_DIR, "image-log.jsonl")
 IMAGE_ANALYTICS_PATH = os.path.join(SOURCES_DIR, "image-analytics.jsonl")
-
-# GCS config — upload is skipped when GCS_BUCKET is not set
 GCS_BUCKET = os.getenv("GCS_BUCKET", "")
 GCS_PREFIX = os.getenv("GCS_PREFIX", "plant-images").rstrip("/")
 GCP_SERVICE_ACCOUNT_FILE = os.getenv(
@@ -92,7 +90,7 @@ def save_image(raw_bytes: bytes) -> tuple[str, str]:
     os.makedirs(IMAGE_DIR, exist_ok=True)
     with open(filepath, "wb") as f:
         f.write(processed)
-    print(f"[1/4] Saved: {filepath} ({len(processed)} bytes)")
+    print(f"Saved: {filepath} ({len(processed)} bytes)")
     return filename, filepath
 
 
@@ -106,7 +104,7 @@ def log_image(filename: str, event_time: datetime, gcs_uri: str | None = None):
         row["gcs_uri"] = gcs_uri
     with open(IMAGE_LOG_PATH, "a") as f:
         f.write(json.dumps(row) + "\n")
-    print(f"[3/4] Logged to {IMAGE_LOG_PATH}")
+    print(f"Logged to {IMAGE_LOG_PATH}")
 
 
 def predict(filename: str, filepath: str) -> dict:
@@ -138,7 +136,7 @@ def predict(filename: str, filepath: str) -> dict:
     with open(IMAGE_ANALYTICS_PATH, "a") as f:
         f.write(json.dumps(result) + "\n")
 
-    print(f"[4/4] Prediction saved to {IMAGE_ANALYTICS_PATH}")
+    print(f"Prediction saved to {IMAGE_ANALYTICS_PATH}")
     return result
 
 

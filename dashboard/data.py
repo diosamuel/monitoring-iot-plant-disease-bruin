@@ -1,9 +1,3 @@
-"""BigQuery data access for the Smart Plant dashboard.
-
-Reads from the gold layer (gold_edw.*) using the service account file
-configured for the Bruin pipeline.
-"""
-
 from __future__ import annotations
 
 import json
@@ -23,9 +17,8 @@ SERVICE_ACCOUNT_FILE = os.getenv(
     str(Path(__file__).resolve().parents[1] / "secrets" / "gcp-secrets.json"),
 )
 
-
 @lru_cache(maxsize=1)
-def bqClient() -> bigquery.Client:
+def bqClient():
     creds = service_account.Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE,
         scopes=["https://www.googleapis.com/auth/cloud-platform"],
@@ -33,18 +26,12 @@ def bqClient() -> bigquery.Client:
     return bigquery.Client(project=PROJECT_ID, credentials=creds)
 
 
-def runQuery(sql: str) -> pd.DataFrame:
+def runQuery(sql: str):
     return bqClient().query(sql).result().to_dataframe(create_bqstorage_client=False)
-
-
-def toNaiveUtc(series: pd.Series) -> pd.Series:
-    """Convert a datetime series to tz-naive UTC."""
+def toNaiveUtc(series: pd.Series):
     s = pd.to_datetime(series, errors="coerce", utc=True)
     return s.dt.tz_convert(None) if s.dt.tz is not None else s
-
-
-def coerceNumeric(series: pd.Series) -> pd.Series:
-    """Strip percent signs / units and coerce to float, NaN on failure."""
+def coerceNumeric(series: pd.Series):
     if series.dtype.kind in "fiu":
         return series.astype(float)
     cleaned = (
@@ -54,10 +41,8 @@ def coerceNumeric(series: pd.Series) -> pd.Series:
         .replace({"": None, "nan": None, "None": None})
     )
     return pd.to_numeric(cleaned, errors="coerce")
-
-
 @st.cache_data(ttl=60, show_spinner=False)
-def getSensorReadings(limit: int = 500) -> pd.DataFrame:
+def getSensorReadings(limit: int = 500):
     sql = f"""
         SELECT filename, event_time, temperature, humidity, soil_moisture, ingested_at
         FROM `{PROJECT_ID}.{DATASET}.sensor_readings`
@@ -71,7 +56,7 @@ def getSensorReadings(limit: int = 500) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def getPlantHealth(limit: int = 50) -> pd.DataFrame:
+def getPlantHealth(limit: int = 50):
     sql = f"""
         SELECT
             filename, event_time, plant_type, health_status, confidence,
@@ -91,7 +76,7 @@ def getPlantHealth(limit: int = 50) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def getWeatherForecast(limit: int = 200) -> pd.DataFrame:
+def getWeatherForecast(limit: int = 200):
     sql = f"""
         SELECT
             adm4, kotkab, kecamatan, desa, datetime_utc, datetime_local,
@@ -108,8 +93,7 @@ def getWeatherForecast(limit: int = 200) -> pd.DataFrame:
     return df
 
 
-def parseJsonList(value) -> list[str]:
-    """possible_issues / recommendations are stored as JSON-encoded strings."""
+def parseJsonList(value):
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return []
     if isinstance(value, list):
