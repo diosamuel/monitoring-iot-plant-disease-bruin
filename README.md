@@ -25,6 +25,9 @@ resource budget:
 
 ![architecture](./architecture.png)
 
+
+## Project Wiring
+![wiring](./wiring.png)
 ---
 
 ## Data Pipeline (Bruin)
