@@ -124,7 +124,7 @@ def getSensorReadings(limit: int = 500):
 def getPlantHealth(limit: int = 50):
     sql = f"""
         SELECT
-            filename, event_time, plant_type, health_status, confidence,
+            filename, event_time, health_status, confidence,
             severity, summary, possible_issues, recommendations,
             temperature, humidity, soil_moisture, ingested_at
         FROM `{PROJECT_ID}.{DATASET_GOLD}.plant_health`

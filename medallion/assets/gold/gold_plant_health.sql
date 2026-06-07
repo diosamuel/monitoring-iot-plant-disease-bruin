@@ -21,9 +21,6 @@ columns:
     description: timestamp of the capture
     checks:
       - name: not_null
-  - name: plant_type
-    type: STRING
-    description: detected plant species
   - name: health_status
     type: STRING
     description: health classification
@@ -66,7 +63,6 @@ columns:
 SELECT
     i.filename,
     i.event_time,
-    i.plant_type,
     i.health_status,
     i.confidence,
     i.severity,

@@ -10,7 +10,6 @@ CREATE OR REPLACE TABLE `learngcp-461809.silver.sensor` (
 CREATE OR REPLACE TABLE `learngcp-461809.silver.image` (
   filename STRING NOT NULL,
   event_time TIMESTAMP NOT NULL,
-  plant_type STRING,
   health_status STRING,
   confidence FLOAT64,
   severity FLOAT64,
@@ -92,7 +91,6 @@ CREATE OR REPLACE TABLE `learngcp-461809.gold.sensor_readings` (
 CREATE OR REPLACE TABLE `learngcp-461809.gold.plant_health` (
   filename STRING NOT NULL,
   event_time TIMESTAMP NOT NULL,
-  plant_type STRING,
   health_status STRING,
   confidence FLOAT64,
   severity FLOAT64,

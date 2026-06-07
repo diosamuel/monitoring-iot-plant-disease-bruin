@@ -9,8 +9,6 @@ materialization:
 columns:
   - name: filename
     type: varchar
-  - name: plant_type
-    type: varchar
   - name: health_status
     type: varchar
   - name: confidence

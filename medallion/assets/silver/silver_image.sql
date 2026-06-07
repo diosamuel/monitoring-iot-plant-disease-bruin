@@ -17,9 +17,6 @@ columns:
   - name: event_time
     type: timestamp
     description: timestamp when the image was captured
-  - name: plant_type
-    type: string
-    description: detected plant species
   - name: health_status
     type: string
     description: health classification (healthy, diseased, unknown)
@@ -48,7 +45,6 @@ columns:
 SELECT
     a.filename,
     l.event_time,
-    a.plant_type,
     a.health_status,
     a.confidence,
     a.severity,
