@@ -1,6 +1,6 @@
 /* @bruin
 
-name: silver_duck.weather
+name: silver.weather
 type: duckdb.sql
 connection: duckdb-weather
 materialization:

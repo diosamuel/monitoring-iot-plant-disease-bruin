@@ -18,9 +18,13 @@ logs/*.log
 
 sources/*.duckdb
 
-modelling/.bruin.yml
-modelling/logs/runs
-modelling/logs/*.log
-modelling/__pycache__/
-modelling/*.py[cod]
+medallion/.bruin.yml
+medallion/logs/runs
+medallion/logs/*.log
+medallion/__pycache__/
+medallion/*.py[cod]
+medallion/temp/*.yml
+sources/*.jsonl
+image_processing/images/*.jpg
 logs/queries
+*.duckdb

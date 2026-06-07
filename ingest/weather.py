@@ -1,10 +1,10 @@
+# Run this twice a day
 import json
 import os
-
 import requests
 
 BMKG_URL = "https://api.bmkg.go.id/publik/prakiraan-cuaca"
-ADM4 = "18.71.02.1003"
+ADM4 = "18.71.02.1003" # Lampung administration code
 JSONL_PATH = os.path.join(os.path.dirname(__file__), "..", "sources", "bmkg_weather.jsonl")
 
 # Fetch

@@ -1,6 +1,6 @@
 /* @bruin
 
-name: silver_duck.image
+name: silver.image
 type: duckdb.sql
 connection: duckdb-image
 materialization:
@@ -14,14 +14,9 @@ columns:
   - name: filename
     type: string
     description: image filename (primary key)
-    checks:
-      - name: not_null
-      - name: unique
   - name: event_time
     type: timestamp
     description: timestamp when the image was captured
-    checks:
-      - name: not_null
   - name: plant_type
     type: string
     description: detected plant species

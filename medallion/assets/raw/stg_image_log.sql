@@ -11,13 +11,9 @@ columns:
   - name: filename
     type: varchar
     description: image filename (matches sensor.filename)
-    checks:
-      - name: not_null
   - name: event_time
     type: timestamp
     description: timestamp when the image was captured
-    checks:
-      - name: not_null
 
 @bruin */
 

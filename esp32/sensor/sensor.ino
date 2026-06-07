@@ -7,10 +7,10 @@
 
 #define SOIL_PIN 34   // AO soil moisture ke GPIO34
 
-const char* ssid = "SigmaFam";
-const char* password = "MIMPIsukses";
+const char* ssid = "SigmaFam"; // Adjust with Home Wifi
+const char* password = "MIMPIsukses"; // Adjust with Home password
 
-const char* mqtt_server = "192.168.1.29";
+const char* mqtt_server = "192.168.1.29"; // Adjust with RaspberryPI hostname
 const int mqtt_port = 1883;
 const char* mqtt_topic = "esp32/sensor";
 

@@ -3,24 +3,27 @@
 Simple DHT22 Sensor Simulator
 Publishes temperature and humidity to MQTT.
 """
-
+import os
 import paho.mqtt.client as mqtt
 import time
 import random
 
-# Simple configuration
-broker = "localhost"
-port = 1883
-topic = "esp32/dht22"
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BROKER_HOST = os.getenv("MQTT_HOST")
+BROKER_PORT = int(os.getenv("MQTT_PORT"))
+TOPIC = os.getenv("MQTT_TOPIC")
 
 def main():
     print("Starting DHT22 simulator...")
-    print(f"Publishing to {broker}:{port} topic: {topic}")
+    print(f"Publishing to {BROKER_HOST}:{BROKER_PORT} topic: {topic}")
     
     client = mqtt.Client()
     
     try:
-        client.connect(broker, port)
+        client.connect(BROKER_HOST, BROKER_PORT)
         client.loop_start()
         
         while True:

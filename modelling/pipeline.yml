@@ -1,7 +1,0 @@
-name: smart-plant-monitoring
-schedule: "0 */12 * * *"
-start_date: "2025-05-29"
-catchup: false
-
-default_connections:
-    google_cloud_platform: "gcp-default"

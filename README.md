@@ -56,19 +56,19 @@ with full lineage tracking. Runs every 12 hours (`0 */12 * * *`).
 
 ```bash
 # Full pipeline (all layers)
-bruin run modelling/
+bruin run medallion/
 
 # Single asset
-bruin run modelling/assets/silver/silver_sensor.sql
+bruin run medallion/assets/silver/silver_sensor.sql
 
 # Ingest silver to BigQuery
-bruin run modelling/assets/silver/silver_sensor.asset.yml
+bruin run medallion/assets/silver/silver_sensor.asset.yml
 
 # Gold layer only
-bruin run modelling/assets/gold/gold_sensor_readings.sql
+bruin run medallion/assets/gold/gold_sensor_readings.sql
 
 # View lineage
-bruin lineage modelling/
+bruin lineage medallion/
 ```
 
 ---
@@ -127,9 +127,9 @@ Place your Google service account JSON at `./secrets/gcp-secrets.json`.
 
 Bruin connections are configured in `.bruin.yml`:
 - `gcp-default` — BigQuery (project: `learngcp-461809`)
-- `duckdb-sensor` — `modelling/assets/staging/stg_sensor.duckdb`
-- `duckdb-image` — `modelling/assets/staging/stg_image.duckdb`
-- `duckdb-weather` — `modelling/assets/staging/stg_weather.duckdb`
+- `duckdb-sensor` — `medallion/assets/staging/stg_sensor.duckdb`
+- `duckdb-image` — `medallion/assets/staging/stg_image.duckdb`
+- `duckdb-weather` — `medallion/assets/staging/stg_weather.duckdb`
 
 ---
 
