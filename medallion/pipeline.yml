@@ -1,6 +1,6 @@
 name: smart-plant-monitoring
 
-schedule: "* * * * *"
+schedule: "0 10,22 * * *"
 start_date: "2025-06-07"
 catchup: false
 
