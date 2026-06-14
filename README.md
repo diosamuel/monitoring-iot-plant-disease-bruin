@@ -99,14 +99,14 @@ python simulate/cam.py          # Simulate camera capture → sources/image-log.
 ## BigQuery Schema
 
 The `schema/bq.sql` file contains `CREATE OR REPLACE TABLE` statements
-for all silver and gold tables in BigQuery under project `learngcp-461809`:
+for all silver and gold tables in BigQuery under project `dataset`:
 
-- `learngcp-461809.silver.sensor`
-- `learngcp-461809.silver.image`
-- `learngcp-461809.silver.weather`
-- `learngcp-461809.gold.sensor_readings`
-- `learngcp-461809.gold.plant_health`
-- `learngcp-461809.gold.weather_forecast`
+- `dataset.silver.sensor`
+- `dataset.silver.image`
+- `dataset.silver.weather`
+- `dataset.gold.sensor_readings`
+- `dataset.gold.plant_health`
+- `dataset.gold.weather_forecast`
 
 ---
 
@@ -126,7 +126,7 @@ cp .env.example .env
 Place your Google service account JSON at `./secrets/gcp-secrets.json`.
 
 Bruin connections are configured in `.bruin.yml`:
-- `gcp-default` — BigQuery (project: `learngcp-461809`)
+- `gcp-default` — BigQuery (project: `dataset`)
 - `duckdb-sensor` — `medallion/assets/staging/stg_sensor.duckdb`
 - `duckdb-image` — `medallion/assets/staging/stg_image.duckdb`
 - `duckdb-weather` — `medallion/assets/staging/stg_weather.duckdb`

@@ -4,12 +4,12 @@ environments:
         connections:
             google_cloud_platform:
                 - name: gcp-default
-                  project_id: learngcp-461809
-                  service_account_file: /media/diosamuel/DATA3/data.gear/smart-plant-monitoring/secrets/gcp-secrets.json
+                  project_id: your-gcp-project
+                  service_account_file: /path/to/gcp-secrets.json
             duckdb:
                 - name: duckdb-sensor
-                  path: /media/diosamuel/DATA3/data.gear/smart-plant-monitoring/medallion/assets/staging/stg_sensor.duckdb
+                  path: /path/to/duckdb
                 - name: duckdb-image
-                  path: /media/diosamuel/DATA3/data.gear/smart-plant-monitoring/medallion/assets/staging/stg_image.duckdb
+                  path: /path/to/duckdb
                 - name: duckdb-weather
-                  path: /media/diosamuel/DATA3/data.gear/smart-plant-monitoring/medallion/assets/staging/stg_weather.duckdb
+                  path: /path/to/duckdb
